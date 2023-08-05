@@ -12,19 +12,12 @@ struct BiDiBMessage
     quint8 num{0};
     quint8 type{0};
     QByteArray data{};
-
-    explicit BiDiBMessage() {}
-
-    BiDiBMessage(int type, QByteArrayView data)
-        : type(type)
-        , data(data.toByteArray())
-    {}
 };
 
 QDebug operator<<(QDebug d, const BiDiBMessage &msg)
 {
-    auto addr = msg.addr.isEmpty() ? "[Self]" : qUtf8Printable(msg.addr.toHex('/'));
-    d << addr << msg.num << qUtf8Printable(msgTypeToString(msg.type))
+    QString addr = msg.addr.isEmpty() ? QStringLiteral("Self") : msg.addr.toHex('/');
+    d << "[" << qUtf8Printable(addr) << "]" << msg.num << qUtf8Printable(msgTypeToString(msg.type))
       << qUtf8Printable(msg.data.toHex('-'));
     return d;
 }
@@ -237,6 +230,44 @@ private:
 
 using MessageHandler = std::function<void(BiDiBMessage)>;
 
+struct __attribute__((packed)) UniqueId
+{
+    union {
+        struct
+        {
+            quint8 zwitch : 1;
+            quint8 booster : 1;
+            quint8 accessory : 1;
+            quint8 dccProg : 1;
+            quint8 dccMain : 1;
+            quint8 ui : 1;
+            quint8 occupancy : 1;
+            quint8 bridge : 1;
+        } clazz;
+        quint8 classId;
+    };
+    quint8 classIdEx;
+    quint8 vendorId;
+    union {
+        struct
+        {
+            quint16 id;
+            quint16 serial;
+        } product;
+        quint32 productId;
+    };
+};
+
+static_assert(sizeof(UniqueId) == 7);
+
+using namespace std::placeholders;
+
+static quint8 Features[256] = {
+    [FEATURE_CTRL_INPUT_COUNT] = 16,
+    [FEATURE_CTRL_PORT_FLAT_MODEL] = 1,
+    [FEATURE_FW_UPDATE_MODE] = 0,
+};
+
 class BiDiBNode : public QObject
 {
     Q_OBJECT
@@ -247,20 +278,16 @@ signals:
 public:
     explicit BiDiBNode()
     {
-        _handlers[MSG_SYS_GET_MAGIC] = [this](auto) {
-            emit sendMessage({MSG_SYS_MAGIC, {"\xfe\xaf", 2}});
-        };
+        constantReply(MSG_SYS_GET_MAGIC, makeMessage<quint16>(MSG_SYS_MAGIC, BIDIB_SYS_MAGIC));
+        constantReply(MSG_NODETAB_GETNEXT, makeMessage<quint8>(MSG_NODE_NA, 255));
+        constantReply(MSG_FEATURE_GETNEXT, makeMessage<quint8>(MSG_FEATURE_NA, 255));
+        constantReply(MSG_SYS_GET_SW_VERSION,
+                      makeMessage<quint8, quint8, quint8>(MSG_SYS_SW_VERSION, 1, 0, 0));
+        constantReply(MSG_BOOST_QUERY, makeMessage<quint8>(MSG_BOOST_STAT, BIDIB_BST_STATE_ON));
 
-        _handlers[MSG_NODETAB_GETALL] = [this](auto) {
-            emit sendMessage({MSG_NODETAB_COUNT, {"\1", 1}});
-            _handlers[MSG_NODETAB_GETNEXT] = [this](auto) {
-                emit sendMessage({MSG_NODETAB, {"\1\0\1\2\3\4\5\6\7", 9}});
-                _handlers[MSG_NODETAB_GETNEXT] = [this](auto) {
-                    emit sendMessage({MSG_NODE_NA, {"\xff", 1}});
-                    _handlers[MSG_NODETAB_GETNEXT] = {};
-                };
-            };
-        };
+        bindMethod(MSG_NODETAB_GETALL, &BiDiBNode::nodetabGetall);
+        bindMethod(MSG_FEATURE_GET, &BiDiBNode::featureGet);
+        bindMethod(MSG_STRING_GET, &BiDiBNode::stringGet);
     }
 
 public slots:
@@ -275,15 +302,148 @@ public slots:
 
 private:
     QList<MessageHandler> _handlers{255};
+
+    void nodetabGetall(BiDiBMessage)
+    {
+        sendReply<quint8>(MSG_NODETAB_COUNT, 1);
+        sendReply<quint8, quint8, UniqueId>(MSG_NODETAB,
+                                            1,
+                                            0,
+                                            {.clazz = {.booster = 1, .accessory = 1},
+                                             .vendorId = 0x0d,
+                                             .productId = 0xdeadbeef});
+    }
+
+    void featureGet(BiDiBMessage m)
+    {
+        quint8 id = m.data[0];
+        sendReply(MSG_FEATURE, id, Features[id]);
+    }
+
+    void stringGet(BiDiBMessage m)
+    {
+        auto id = unpack<quint8, quint8>(m);
+
+        QString val;
+
+        switch (id.first << 16 | id.second) {
+        case 0x0000:
+            val = "My Product";
+            break;
+        case 0x0001:
+            val = "My Name";
+            break;
+        }
+
+        sendReply(MSG_STRING, id.first, id.second, val);
+    }
+
+    template<class T>
+    void append(QByteArray &ba, const T &t)
+    {
+        ba.append(reinterpret_cast<const char *>(&t), sizeof(T));
+    }
+
+    template<>
+    void append<QString>(QByteArray &ba, const QString &t)
+    {
+        assert(t.size() < 255);
+        ba.append(t.size());
+        ba.append(t.toLocal8Bit(), t.size());
+    }
+
+    template<class T>
+    void sendReply(int type, const T &t)
+    {
+        emit sendMessage(makeMessage(type, t));
+    }
+
+    template<class T1, class T2>
+    void sendReply(int type, const T1 &t1, const T2 &t2)
+    {
+        emit sendMessage(makeMessage(type, t1, t2));
+    }
+
+    template<class T1, class T2, class T3>
+    void sendReply(int type, const T1 &t1, const T2 &t2, const T3 &t3)
+    {
+        emit sendMessage(makeMessage(type, t1, t2, t3));
+    }
+
+    template<class T>
+    BiDiBMessage makeMessage(int type, const T &t)
+    {
+        BiDiBMessage m;
+        m.type = type;
+        append(m.data, t);
+        return m;
+    }
+
+    template<class T1, class T2>
+    BiDiBMessage makeMessage(int type, const T1 &t1, const T2 &t2)
+    {
+        BiDiBMessage m;
+        m.type = type;
+        append(m.data, t1);
+        append(m.data, t2);
+        return m;
+    }
+
+    template<class T1, class T2, class T3>
+    BiDiBMessage makeMessage(int type, const T1 &t1, const T2 &t2, const T3 &t3)
+    {
+        BiDiBMessage m;
+        m.type = type;
+        append(m.data, t1);
+        append(m.data, t2);
+        append(m.data, t3);
+        return m;
+    }
+
+    template<class F>
+    void bindMethod(quint8 type, F &&f)
+    {
+        _handlers[type] = std::bind(f, this, _1);
+    }
+
+    template<class F>
+    void bindLambda(quint8 type, F &&f)
+    {
+        _handlers[type] = f;
+    }
+
+    void constantReply(quint8 type, const BiDiBMessage &m)
+    {
+        _handlers[type] = [this, m](auto) { emit sendMessage(m); };
+    }
+
+    template<quint8 id>
+    inline void clearHandler()
+    {
+        _handlers[id] = {};
+    }
+
+    template<class T>
+    T unpack(const BiDiBMessage &msg)
+    {
+        return *reinterpret_cast<const T *>(msg.data.data());
+    }
+
+    template<class T1, class T2>
+    std::pair<T1, T2> unpack(const BiDiBMessage &msg)
+    {
+        auto buf = msg.data.data();
+        int pos = 0;
+        T1 t1 = *reinterpret_cast<const T1 *>(&buf[pos]);
+        pos += sizeof(T1);
+        T2 t2 = *reinterpret_cast<const T2 *>(&buf[pos]);
+        return std::make_pair(t1, t2);
+    }
 };
 
 #include "expected.hpp"
 
-struct Error1
-{};
-
-struct Error2
-{};
+using Error1 = QString;
 
 tl::expected<int, Error1> func1()
 {
@@ -292,6 +452,8 @@ tl::expected<int, Error1> func1()
 
 tl::expected<QString, Error1> func2(int num)
 {
+    if (num == 42)
+        return tl::make_unexpected("Haha!");
     return QString::number(num);
 }
 
@@ -299,6 +461,8 @@ int main(int argc, char *argv[])
 {
     if (auto res = func1().and_then(func2))
         qDebug() << *res;
+    else
+        qDebug() << res.error();
 
     QCoreApplication app(argc, argv);
 
@@ -309,42 +473,36 @@ int main(int argc, char *argv[])
     QObject::connect(&serialTransport,
                      &BiDiBSerialTransport::packetReceived,
                      &packetParser,
-                     &BiDiBPacketParser::parsePacket,
-                     Qt::QueuedConnection);
+                     &BiDiBPacketParser::parsePacket);
 
     QObject::connect(&packetParser,
                      &BiDiBPacketParser::sendPacket,
                      &serialTransport,
-                     &BiDiBSerialTransport::sendPacket,
-                     Qt::QueuedConnection);
+                     &BiDiBSerialTransport::sendPacket);
 
     QObject::connect(&packetParser,
                      &BiDiBPacketParser::messageReceived,
                      &node,
-                     &BiDiBNode::handleMessage,
-                     Qt::QueuedConnection);
+                     &BiDiBNode::handleMessage);
 
     QObject::connect(&node,
                      &BiDiBNode::sendMessage,
                      &packetParser,
-                     &BiDiBPacketParser::sendMessage,
-                     Qt::QueuedConnection);
+                     &BiDiBPacketParser::sendMessage);
 
     return app.exec();
 }
 
-const char *MessageNames[256] = {[MSG_SYS_GET_MAGIC] = "SYS_GET_MAGIC",
-                                 [MSG_SYS_MAGIC] = "SYS_MAGIC",
-                                 [MSG_SYS_CLOCK] = "SYS_CLOCK",
-                                 [MSG_NODETAB_GETALL] = "NODETAB_GETALL",
-                                 [MSG_NODETAB_GETNEXT] = "NODETAB_GETNEXT",
-                                 [MSG_NODETAB] = "NODETAB",
-                                 [MSG_SYS_GET_SW_VERSION] = "SYS_GET_SW_VERSION",
-                                 [MSG_FEATURE_GET] = "FEATURE_GET",
-                                 [MSG_SYS_ENABLE] = "SYS_ENABLE",
-                                 [MSG_STRING_GET] = "STRING_GET",
-                                 [MSG_NODE_NA] = "NODE_NA",
-                                 [MSG_NODETAB_COUNT] = "NODETAB_COUNT"};
+#define MSG(msg) [MSG_##msg] = #msg
+
+const char *MessageNames[256] = {MSG(SYS_GET_MAGIC),      MSG(SYS_MAGIC),       MSG(SYS_CLOCK),
+                                 MSG(NODETAB_GETALL),     MSG(NODETAB_GETNEXT), MSG(NODETAB),
+                                 MSG(SYS_GET_SW_VERSION), MSG(SYS_SW_VERSION),  MSG(FEATURE_GETALL),
+                                 MSG(FEATURE_GETNEXT),    MSG(FEATURE_GET),     MSG(FEATURE),
+                                 MSG(FEATURE_NA),         MSG(SYS_ENABLE),      MSG(NODE_NA),
+                                 MSG(STRING_GET),         MSG(STRING_SET),      MSG(STRING),
+                                 MSG(SYS_DISABLE),        MSG(BOOST_QUERY),     MSG(BOOST_STAT),
+                                 MSG(NODETAB_COUNT)};
 
 inline QString msgTypeToString(quint8 type)
 {
