@@ -1,6 +1,8 @@
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QSerialPort>
+#include <QtCore/qobjectdefs.h>
+#include <QTimer>
 
 #include "bidib.h"
 #include "bidib_messages.h"
@@ -73,6 +75,19 @@ struct Packer
     }
 };
 
+struct Time
+{
+    quint8 minute : 6;
+    quint8 t1 : 2;
+    quint8 hour : 6;
+    quint8 t2 : 2;
+    quint8 dow : 6;
+    quint8 t3 : 2;
+    quint8 speed : 6;
+    quint8 t4 : 2;
+};
+static_assert(sizeof(Time) == 4);
+
 struct Unpacker
 {
     const char *buf;
@@ -85,12 +100,12 @@ struct Unpacker
 
     auto bufferOverflow()
     {
-        static auto const e = tl::make_unexpected(QStringLiteral("Buffer overflow"));
+        static auto const e = tl::make_unexpected(QStringLiteral("out of data"));
         return e;
     }
 
     template<typename T>
-    T consume(T &&t, size_t bytes = sizeof(T))
+    T extract(T t, size_t bytes = sizeof(T))
     {
         buf += bytes;
         avail -= bytes;
@@ -102,7 +117,7 @@ struct Unpacker
     {
         if (avail < sizeof(T))
             return bufferOverflow();
-        return consume(*reinterpret_cast<const T *>(buf));
+        return extract(*reinterpret_cast<const T *>(buf));
     }
 
     template<>
@@ -111,7 +126,7 @@ struct Unpacker
         quint8 len = *get<quint8>();
         if (avail < len)
             return bufferOverflow();
-        return consume(QString::fromLatin1(buf, len), len);
+        return extract(QString::fromLatin1(buf, len), len);
     }
 };
 
@@ -149,19 +164,11 @@ tl::expected<std::tuple<Types...>, E> checkUnexpected(std::tuple<tl::expected<Ty
     return tl::unexpected(errors.e.join(", "));
 }
 
-template<typename T>
-tl::expected<T, QString> unpack(const QByteArray &ba)
+template<typename... Types>
+tl::expected<std::tuple<Types...>, QString> unpack(const QByteArray &ba)
 {
     Unpacker u(ba);
-    return u.get<T>();
-}
-
-template<typename T1, class T2, class... Types>
-tl::expected<std::tuple<T1, T2, Types...>, QString> unpack(const QByteArray &ba)
-{
-    Unpacker u(ba);
-    auto t = std::make_tuple(u.get<T1>(), u.get<T2>(), u.get<Types>()...);
-    return checkUnexpected(t);
+    return checkUnexpected(std::make_tuple(u.get<Types>()...));
 }
 
 class BiDiBSerialTransport : public QObject
@@ -344,6 +351,59 @@ private:
 
 using MessageHandler = std::function<void(BiDiBMessage)>;
 
+typedef struct __attribute__((__packed__)) // t_bidib_cs_drive
+{
+    union {
+        struct
+        {
+            uint8_t addrl; // low byte of addr
+            uint8_t addrh; // high byte of addr
+        };
+        uint16_t addr; // true dcc address (start with 0)
+    };
+    uint8_t format; // BIDIB_CS_DRIVE_FORMAT_DCC14, _DCC28, _DCC128
+    uint8_t active; // BIDIB_CS_DRIVE_SPEED_BIT,
+        // BIDIB_CS_DRIVE_F1F4_BIT     (1<<1)
+        // BIDIB_CS_DRIVE_F5F8_BIT     (1<<2)
+        // BIDIB_CS_DRIVE_F9F12_BIT    (1<<3)
+        // BIDIB_CS_DRIVE_F13F20_BIT   (1<<4)
+        // BIDIB_CS_DRIVE_F21F28_BIT   (1<<5)
+    uint8_t speed; // like DCC, MSB=1:forward, MSB=0:revers, speed=1: ESTOP
+    union {
+        struct
+        {
+            uint8_t f4_f1 : 4; // functions f4..f1
+            uint8_t light : 1; // f0
+            uint8_t fill : 3;  // 3 bits as usable space (ie. to store f29-f31 on a node)
+        };
+        uint8_t f4_f0;
+    };
+    union {
+        struct
+        {
+            uint8_t f8_f5 : 4;  // functions f8..f5
+            uint8_t f12_f9 : 4; // functions f12..f9
+        };
+        uint8_t f12_f5;
+    };
+    union {
+        struct
+        {
+            uint8_t f16_f13 : 4; // functions f16..f13
+            uint8_t f20_f17 : 4; // functions f20..f17
+        };
+        uint8_t f20_f13;
+    };
+    union {
+        struct
+        {
+            uint8_t f24_f21 : 4; // functions f24..f21
+            uint8_t f28_f25 : 4; // functions f28..f25
+        };
+        uint8_t f28_f21;
+    };
+} t_bidib_cs_drive;
+
 struct __attribute__((packed)) UniqueId
 {
     union {
@@ -394,19 +454,6 @@ struct Version
 };
 static_assert(sizeof(Version) == 3);
 
-struct Time
-{
-    quint8 t1 : 2;
-    quint8 minute : 6;
-    quint8 t2 : 2;
-    quint8 hour : 6;
-    quint8 t3 : 2;
-    quint8 dow : 6;
-    quint8 t4 : 2;
-    quint8 speed : 6;
-};
-static_assert(sizeof(Time) == 4);
-
 class BiDiBNode : public QObject
 {
     Q_OBJECT
@@ -417,19 +464,24 @@ signals:
 public:
     explicit BiDiBNode()
     {
-        constantReply(MSG_SYS_GET_MAGIC, makeMessage<quint16>(MSG_SYS_MAGIC, BIDIB_SYS_MAGIC));
-        constantReply(MSG_FEATURE_GETNEXT, makeMessage<quint8>(MSG_FEATURE_NA, 255));
-        constantReply(MSG_SYS_GET_SW_VERSION, makeMessage<Version>(MSG_SYS_SW_VERSION, {1, 0, 0}));
-        constantReply(MSG_BOOST_QUERY, makeMessage<quint8>(MSG_BOOST_STAT, BIDIB_BST_STATE_ON));
-        constantReply(MSG_NODETAB_GETNEXT, NodeNA);
+        registerStaticReply(MSG_SYS_GET_MAGIC, makeMessage<quint16>(MSG_SYS_MAGIC, BIDIB_SYS_MAGIC));
+        registerStaticReply(MSG_FEATURE_GETNEXT, makeMessage<quint8>(MSG_FEATURE_NA, 255));
+        registerStaticReply(MSG_SYS_GET_SW_VERSION,
+                            makeMessage<Version>(MSG_SYS_SW_VERSION, {1, 0, 0}));
+        registerStaticReply(MSG_BOOST_QUERY,
+                            makeMessage<quint8>(MSG_BOOST_STAT, BIDIB_BST_STATE_ON));
+        registerStaticReply(MSG_NODETAB_GETNEXT, NodeNA);
 
-        bindMethod(MSG_NODETAB_GETALL, &BiDiBNode::nodetabGetall);
-        bindMethod(MSG_FEATURE_GET, &BiDiBNode::featureGet);
-        bindMethod(MSG_STRING_GET, &BiDiBNode::stringGet);
-        bindMethod(MSG_SYS_CLOCK, &BiDiBNode::clock);
-        bindMethod(MSG_SYS_ENABLE, &BiDiBNode::enableSystem);
-        bindMethod(MSG_SYS_DISABLE, &BiDiBNode::disableSystem);
-        bindMethod(MSG_LC_PORT_QUERY_ALL, &BiDiBNode::msgLcPortQueryAll);
+        registerMessageHandler(MSG_STRING_GET, &BiDiBNode::stringGet);
+        registerMessageHandler(MSG_SYS_ENABLE, &BiDiBNode::enableSystem);
+        registerMessageHandler(MSG_SYS_DISABLE, &BiDiBNode::disableSystem);
+        registerMessageHandler(MSG_LC_PORT_QUERY_ALL, &BiDiBNode::msgLcPortQueryAll);
+        registerMessageHandler(MSG_NODETAB_GETALL, &BiDiBNode::nodetabGetall);
+        registerMessageHandler(MSG_FEATURE_GET, &BiDiBNode::featureGet);
+        registerMessageHandler(MSG_SYS_CLOCK, &BiDiBNode::clock);
+        registerMessageHandler(MSG_CS_DRIVE, &BiDiBNode::handleMSG_CS_DRIVE);
+        registerMessageHandler(MSG_CS_SET_STATE, &BiDiBNode::handleMSG_CS_SET_STATE);
+        registerMessageHandler(MSG_ACCESSORY_SET, &BiDiBNode::handleMSG_ACCESSORY_SET);
 
         _nodes << UniqueId{.clazz = {.booster = 1, .accessory = 1, .dccMain = 1},
                            .vendorId = 0x0d,
@@ -447,13 +499,41 @@ public slots:
     }
 
 private:
+    void handleMSG_CS_DRIVE(t_bidib_cs_drive cs_drive)
+    {
+        quint8 ack = 1;
+        sendReply(MSG_CS_DRIVE_ACK, cs_drive.addr, ack);
+    }
+
+    void handleMSG_CS_SET_STATE(quint8 state)
+    {
+        if (state != BIDIB_CS_STATE_QUERY)
+            _csState = state;
+        sendReply(MSG_CS_STATE, _csState);
+    }
+
+    void handleMSG_ACCESSORY_SET(quint8 anum, quint8 aspect)
+    {
+        quint8 total = 2;
+        quint8 execute = 0b00000011;
+        quint8 wait = 10;
+        sendReply(MSG_ACCESSORY_STATE, anum, aspect, total, execute, wait);
+        QTimer::singleShot(1000, this, [this, anum, aspect, total] {
+            quint8 execute = 0b00000010;
+            quint8 wait = 0;
+            sendReply(MSG_ACCESSORY_STATE, anum, aspect, total, execute, wait);
+        });
+    }
+
+private:
     static const BiDiBMessage NodeNA;
 
     QList<MessageHandler> _handlers{255};
     QList<UniqueId> _nodes;
     quint8 _nodeTabVersion{1};
+    quint8 _csState{BIDIB_CS_STATE_OFF};
 
-    void nodetabGetall(BiDiBMessage)
+    void nodetabGetall()
     {
         auto iter = QSharedPointer<QListIterator<UniqueId>>::create(_nodes);
 
@@ -462,43 +542,34 @@ private:
             bindLambda(MSG_NODETAB_GETNEXT, [this, iter](auto) {
                 sendReply<quint8, quint8>(MSG_NODETAB, _nodeTabVersion, 0, iter->next());
                 if (!iter->hasNext())
-                    constantReply(MSG_NODETAB_GETNEXT, NodeNA);
+                    registerStaticReply(MSG_NODETAB_GETNEXT, NodeNA);
             });
         } else {
-            constantReply(MSG_NODETAB_GETNEXT, NodeNA);
+            registerStaticReply(MSG_NODETAB_GETNEXT, NodeNA);
         }
     }
 
-    void featureGet(BiDiBMessage m)
+    void featureGet(quint8 id) { sendReply(MSG_FEATURE, id, Features[id]); }
+
+    void clock(Time time)
     {
-        if (auto id = unpack<quint8>(m.data))
-            sendReply(MSG_FEATURE, id, Features[*id]);
+        qDebug() << "CLOCK" << this << time.dow << time.hour << time.minute << time.speed;
     }
 
-    void clock(BiDiBMessage m)
+    void stringGet(quint8 first, quint8 second)
     {
-        if (auto time = unpack<Time>(m.data))
-            qDebug() << "CLOCK" << time->dow << time->hour << time->minute << time->speed;
-    }
+        QString val;
 
-    void stringGet(BiDiBMessage m)
-    {
-        if (auto data = unpack<quint8, quint8>(m.data)) {
-            auto [first, second] = *data;
-
-            QString val;
-
-            switch (first << 16 | second) {
-            case 0x0000:
-                val = "My Product";
-                break;
-            case 0x0001:
-                val = "My Name";
-                break;
-            }
-
-            sendReply(MSG_STRING, first, second, val);
+        switch (first << 16 | second) {
+        case 0x0000:
+            val = "My Product";
+            break;
+        case 0x0001:
+            val = "My Name";
+            break;
         }
+
+        sendReply(MSG_STRING, first, second, val);
     }
 
     void msgLcPortQueryAll(BiDiBMessage m)
@@ -509,7 +580,7 @@ private:
 
         switch (m.data.size()) {
         case 2:
-            select = *unpack<quint16>(m.data);
+            std::tie(select) = *unpack<quint16>(m.data);
             break;
         case 6:
             std::tie(select, start, end) = *unpack<quint16, quint16, quint16>(m.data);
@@ -518,11 +589,12 @@ private:
 
         for (quint8 port = std::max(quint16(0), start); port < std::min(quint16(15), end); ++port)
             sendReply(MSG_LC_STAT, quint8(BIDIB_PORTTYPE_SWITCH), port, quint8(0));
+
         sendReply(MSG_LC_NA, quint16(0xffff));
     }
 
-    void enableSystem(BiDiBMessage m) { qDebug() << "System enabled"; }
-    void disableSystem(BiDiBMessage m) { qDebug() << "System disabled"; }
+    void enableSystem() { qDebug() << "System enabled"; }
+    void disableSystem() { qDebug() << "System disabled"; }
 
     template<class T>
     void append(QByteArray &ba, const T &t)
@@ -565,15 +637,33 @@ private:
         _handlers[type] = f;
     }
 
-    void constantReply(quint8 type, const BiDiBMessage &m)
+    void registerStaticReply(quint8 type, const BiDiBMessage &m)
     {
         _handlers[type] = [this, m](auto) { emit sendMessage(m); };
     }
 
-    template<quint8 id>
-    inline void clearHandler()
+    inline void clearHandler(quint8 type) { _handlers[type] = {}; }
+
+    void registerMessageHandler(quint8 type, void (BiDiBNode::*handler)())
     {
-        _handlers[id] = {};
+        _handlers[type] = [this, handler](auto) { (this->*handler)(); };
+    }
+
+    void registerMessageHandler(quint8 type, void (BiDiBNode::*handler)(BiDiBMessage))
+    {
+        _handlers[type] = [this, handler](BiDiBMessage m) { (this->*handler)(m); };
+    }
+
+    template<typename... Args>
+    void registerMessageHandler(quint8 type, void (BiDiBNode::*handler)(Args... args))
+    {
+        _handlers[type] = [this, handler](BiDiBMessage m) {
+            auto args = unpack<Args...>(m.data);
+            if (args)
+                std::apply(handler, std::tuple_cat(std::make_tuple(this), *args));
+            else
+                qCritical() << "error unpacking args:" << args.error() << m;
+        };
     }
 };
 
