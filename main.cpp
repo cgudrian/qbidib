@@ -371,6 +371,7 @@ struct __attribute__((packed)) UniqueId
         quint32 productId;
     };
 };
+static_assert(sizeof(UniqueId) == 7);
 
 QDebug operator<<(QDebug d, const UniqueId &id)
 {
@@ -378,8 +379,6 @@ QDebug operator<<(QDebug d, const UniqueId &id)
       << qUtf8Printable(QString::number(id.productId, 16));
     return d;
 }
-
-static_assert(sizeof(UniqueId) == 7);
 
 using namespace std::placeholders;
 
@@ -419,10 +418,10 @@ public:
     explicit BiDiBNode()
     {
         constantReply(MSG_SYS_GET_MAGIC, makeMessage<quint16>(MSG_SYS_MAGIC, BIDIB_SYS_MAGIC));
-        constantReply(MSG_NODETAB_GETNEXT, makeMessage<quint8>(MSG_NODE_NA, 255));
         constantReply(MSG_FEATURE_GETNEXT, makeMessage<quint8>(MSG_FEATURE_NA, 255));
         constantReply(MSG_SYS_GET_SW_VERSION, makeMessage<Version>(MSG_SYS_SW_VERSION, {1, 0, 0}));
         constantReply(MSG_BOOST_QUERY, makeMessage<quint8>(MSG_BOOST_STAT, BIDIB_BST_STATE_ON));
+        constantReply(MSG_NODETAB_GETNEXT, NodeNA);
 
         bindMethod(MSG_NODETAB_GETALL, &BiDiBNode::nodetabGetall);
         bindMethod(MSG_FEATURE_GET, &BiDiBNode::featureGet);
@@ -430,6 +429,11 @@ public:
         bindMethod(MSG_SYS_CLOCK, &BiDiBNode::clock);
         bindMethod(MSG_SYS_ENABLE, &BiDiBNode::enableSystem);
         bindMethod(MSG_SYS_DISABLE, &BiDiBNode::disableSystem);
+        bindMethod(MSG_LC_PORT_QUERY_ALL, &BiDiBNode::msgLcPortQueryAll);
+
+        _nodes << UniqueId{.clazz = {.booster = 1, .accessory = 1, .dccMain = 1},
+                           .vendorId = 0x0d,
+                           .productId = 0xdeadbeef};
     }
 
 public slots:
@@ -443,17 +447,26 @@ public slots:
     }
 
 private:
+    static const BiDiBMessage NodeNA;
+
     QList<MessageHandler> _handlers{255};
+    QList<UniqueId> _nodes;
+    quint8 _nodeTabVersion{1};
 
     void nodetabGetall(BiDiBMessage)
     {
-        sendReply<quint8>(MSG_NODETAB_COUNT, 1);
-        sendReply<quint8, quint8, UniqueId>(MSG_NODETAB,
-                                            1,
-                                            0,
-                                            {.clazz = {.booster = 1, .accessory = 1},
-                                             .vendorId = 0x0d,
-                                             .productId = 0xdeadbeef});
+        auto iter = QSharedPointer<QListIterator<UniqueId>>::create(_nodes);
+
+        sendReply<quint8>(MSG_NODETAB_COUNT, _nodes.count());
+        if (iter->hasNext()) {
+            bindLambda(MSG_NODETAB_GETNEXT, [this, iter](auto) {
+                sendReply<quint8, quint8>(MSG_NODETAB, _nodeTabVersion, 0, iter->next());
+                if (!iter->hasNext())
+                    constantReply(MSG_NODETAB_GETNEXT, NodeNA);
+            });
+        } else {
+            constantReply(MSG_NODETAB_GETNEXT, NodeNA);
+        }
     }
 
     void featureGet(BiDiBMessage m)
@@ -488,6 +501,26 @@ private:
         }
     }
 
+    void msgLcPortQueryAll(BiDiBMessage m)
+    {
+        quint16 select = 0xffff;
+        quint16 start = 0;
+        quint16 end = 0xffff;
+
+        switch (m.data.size()) {
+        case 2:
+            select = *unpack<quint16>(m.data);
+            break;
+        case 6:
+            std::tie(select, start, end) = *unpack<quint16, quint16, quint16>(m.data);
+            break;
+        }
+
+        for (quint8 port = std::max(quint16(0), start); port < std::min(quint16(15), end); ++port)
+            sendReply(MSG_LC_STAT, quint8(BIDIB_PORTTYPE_SWITCH), port, quint8(0));
+        sendReply(MSG_LC_NA, quint16(0xffff));
+    }
+
     void enableSystem(BiDiBMessage m) { qDebug() << "System enabled"; }
     void disableSystem(BiDiBMessage m) { qDebug() << "System disabled"; }
 
@@ -512,7 +545,7 @@ private:
     }
 
     template<class... Types>
-    BiDiBMessage makeMessage(int type, Types const &...t)
+    static BiDiBMessage makeMessage(int type, Types const &...t)
     {
         BiDiBMessage m;
         m.type = type;
@@ -543,6 +576,8 @@ private:
         _handlers[id] = {};
     }
 };
+
+const BiDiBMessage BiDiBNode::NodeNA = BiDiBNode::makeMessage<quint8>(MSG_NODE_NA, 0xff);
 
 using Error1 = QString;
 
