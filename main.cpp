@@ -1,8 +1,8 @@
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QSerialPort>
-#include <QtCore/qobjectdefs.h>
 #include <QTimer>
+#include <QtCore/qobjectdefs.h>
 
 #include "bidib.h"
 #include "bidib_messages.h"
