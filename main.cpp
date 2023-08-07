@@ -244,7 +244,12 @@ public:
             }
             out.append(c);
         }
-        out.append(crc);
+        if (crc == BIDIB_PKT_MAGIC) {
+            out.append(BIDIB_PKT_ESCAPE);
+            out.append(crc ^ 0x20);
+        } else {
+            out.append(crc);
+        }
         out.append(BIDIB_PKT_MAGIC);
 
         _serial.write(out);
