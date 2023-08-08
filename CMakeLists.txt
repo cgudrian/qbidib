@@ -20,11 +20,9 @@ qt_add_library(bidib
 )
 target_link_libraries(bidib PUBLIC Qt6::Core)
 
-qt_add_executable(bidib-test
-    tst_bidib.cpp
-)
+qt_add_executable(bidib-test tst_bidib.cpp)
+target_link_libraries(bidib-test PRIVATE Qt6::Test bidib)
 add_test(NAME bidib-test COMMAND bidib-test)
-target_link_libraries(bidib-test PRIVATE Qt6::Test)
 
 qt_add_executable(BiDiBTest
     bidib_messages.h

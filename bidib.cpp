@@ -1,7 +1,7 @@
 #include "bidib.h"
 #include "bidib_messages.h"
 
-namespace bidib {
+namespace bdb {
 
 #define MSG(msg) [MSG_##msg] = #msg
 
@@ -153,4 +153,4 @@ QString messageName(quint8 type)
     return MessageNames[type] ? MessageNames[type] : QString::number(type);
 }
 
-} // namespace bidib
+} // namespace bdb
