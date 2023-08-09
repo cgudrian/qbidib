@@ -17,119 +17,88 @@ enum class Error {
     AddressTooLong,
     AddressStackEmpty,
     AddressStackFull,
+    AddressMissingTerminator,
 };
 
-class address
+class Address
 {
 public:
-    address() {}
-
-    address(quint8 a1, quint8 a2)
-        : _stack(make_stack(a1, a2))
-    {}
-
-    address(quint8 a1, quint8 a2, quint8 a3)
-        : _stack(make_stack(a1, a2, a3))
-    {}
-
-    address(quint8 a1, quint8 a2, quint8 a3, quint8 a4)
-        : _stack(make_stack(a1, a2, a3, a4))
-    {}
+    static Address localNode() { return {}; }
 
     qsizetype size() const
     {
-        if (_stack == 0)
-            return 0;
-        if (_stack <= 0xff)
-            return 1;
-        if (_stack <= 0xffff)
-            return 2;
-        if (_stack <= 0xffffff)
+        if (_stack & 0xff000000)
+            return 4;
+        if (_stack & 0xff0000)
             return 3;
-        return 4;
+        if (_stack & 0xff00)
+            return 2;
+        if (_stack & 0xff)
+            return 1;
+        return 0;
     }
 
-    bool isMe() const { return _stack == 0; }
+    bool isLocalNode() const { return _stack == 0; }
 
-    tl::expected<address, Error> downstream() const
+    tl::expected<quint8, Error> downstream()
     {
-        if (isMe())
+        if (isLocalNode())
             return tl::make_unexpected(Error::AddressStackEmpty);
-        return address(_stack >> 8);
+        auto node = _stack & 0xff;
+        _stack >>= 8;
+        return node;
     }
 
-    tl::expected<address, Error> upstream(quint8 next) const
+    tl::expected<void, Error> upstream(quint8 node)
     {
         if (size() == 4)
             return tl::make_unexpected(Error::AddressStackFull);
-        return address(_stack << 8 | next);
+        _stack = (_stack << 8) | node;
+        return {};
     }
 
-    bool operator==(const address &rhs) const { return _stack == rhs._stack; }
+    bool operator==(const Address &rhs) const { return _stack == rhs._stack; }
 
-    static tl::expected<address, Error> parse(const QByteArray &ba)
+    static tl::expected<Address, Error> parse(const QByteArray &ba)
     {
         if (ba.isEmpty())
             return tl::make_unexpected(Error::OutOfData);
         auto size = ba.indexOf('\0');
+        if (size == -1)
+            return tl::make_unexpected(Error::AddressMissingTerminator);
         if (size > 4)
             return tl::make_unexpected(Error::AddressTooLong);
-        return address(ba.first(size));
+        return Address(ba.first(size));
     }
 
-    static address create(quint8 a1) { return address(a1); }
-
 private:
-    explicit address(QByteArray bytes)
+    Address() {}
+
+    explicit Address(QByteArray bytes)
     {
         bytes.resize(4, 0);
-        qDebug() << bytes.toHex();
         _stack = *reinterpret_cast<const quint32 *>(bytes.constData());
     }
 
-    explicit address(quint32 stack)
+    explicit Address(quint32 stack)
         : _stack(stack)
     {}
 
-    static quint32 make_stack(quint8 a1)
-    {
-        quint8 bytes[4] = {a1};
-        return *reinterpret_cast<quint32 *>(bytes);
-    }
-
-    static quint32 make_stack(quint8 a1, quint8 a2)
-    {
-        quint8 bytes[4] = {a1, a2};
-        return *reinterpret_cast<quint32 *>(bytes);
-    }
-
-    static quint32 make_stack(quint8 a1, quint8 a2, quint8 a3)
-    {
-        quint8 bytes[4] = {a1, a2, a3};
-        return *reinterpret_cast<quint32*>(bytes);
-    }
-
-    static quint32 make_stack(quint8 a1, quint8 a2, quint8 a3, quint8 a4)
-    {
-        quint8 bytes[4] = {a1, a2, a3, a4};
-        return *reinterpret_cast<quint32*>(bytes);
-    }
-
     quint32 _stack{};
 
-    friend QDebug operator<<(QDebug d, const address &a);
+    friend QDebug operator<<(QDebug d, const Address &a);
 };
 
-QDebug operator<<(QDebug d, const address &a)
+QDebug operator<<(QDebug d, const Address &a)
 {
     d << QByteArray(reinterpret_cast<const char *>(&a), sizeof(a)).toHex('-');
     return d;
 }
 
-class message
+class Message
 {
 public:
-    explicit message(quint8 type, const QByteArray &payload)
+    explicit Message(quint8 type, const QByteArray &payload)
         : _type(type)
         , _payload(payload)
     {}
@@ -145,4 +114,4 @@ private:
 
 QString messageName(quint8 type);
 
-} // namespace bdb
+} // namespace Bd
