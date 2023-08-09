@@ -48,6 +48,7 @@ public:
             return 3;
         return 4;
     }
+
     bool isMe() const { return _stack == 0; }
 
     tl::expected<address, error> downstream() const
@@ -73,7 +74,7 @@ public:
         auto size = ba.indexOf('\0');
         if (size > 4)
             return tl::make_unexpected(error::address_too_large);
-        return address(ba.left(size));
+        return address(ba.first(size));
     }
 
     static address create(quint8 a1) { return address(a1); }
@@ -81,7 +82,8 @@ public:
 private:
     explicit address(QByteArray bytes)
     {
-        bytes.resize(4);
+        bytes.resize(4, 0);
+        qDebug() << bytes.toHex();
         _stack = *reinterpret_cast<const quint32 *>(bytes.constData());
     }
 
@@ -89,18 +91,28 @@ private:
         : _stack(stack)
     {}
 
-    static quint32 make_stack(quint8 a1) { return a1; }
+    static quint32 make_stack(quint8 a1)
+    {
+        quint8 bytes[4] = {a1};
+        return *reinterpret_cast<quint32 *>(bytes);
+    }
 
-    static quint32 make_stack(quint8 a1, quint8 a2) { return make_stack(a1) << 8 | a2; }
+    static quint32 make_stack(quint8 a1, quint8 a2)
+    {
+        quint8 bytes[4] = {a1, a2};
+        return *reinterpret_cast<quint32 *>(bytes);
+    }
 
     static quint32 make_stack(quint8 a1, quint8 a2, quint8 a3)
     {
-        return make_stack(a1, a2) << 8 | a3;
+        quint8 bytes[4] = {a1, a2, a3};
+        return *reinterpret_cast<quint32*>(bytes);
     }
 
     static quint32 make_stack(quint8 a1, quint8 a2, quint8 a3, quint8 a4)
     {
-        return make_stack(a1, a2, a3) << 8 | a4;
+        quint8 bytes[4] = {a1, a2, a3, a4};
+        return *reinterpret_cast<quint32*>(bytes);
     }
 
     quint32 _stack{};
@@ -110,7 +122,7 @@ private:
 
 QDebug operator<<(QDebug d, const address &a)
 {
-    d << QString::number(a._stack, 16);
+    d << QByteArray(reinterpret_cast<const char *>(&a), sizeof(a)).toHex('-');
     return d;
 }
 
