@@ -20,8 +20,10 @@ private slots:
     void addressUpstream();
     void addressUpstreamFullStack();
     void addressSize();
+    void addressToByteArray();
 
     void messageCreateWithTypeAndPayload();
+    void messageToSendBuffer();
 };
 
 template<typename... Args>
@@ -35,14 +37,14 @@ QByteArray ba(Args... args)
 
 void TestBiDiB::addressParseEmptyBuffer()
 {
-    const auto a = Bd::Address::parse({});
+    auto a = Bd::Address::parse({});
     QVERIFY(!a.has_value());
     QCOMPARE(a.error(), Bd::Error::OutOfData);
 }
 
 void TestBiDiB::addressParseBufferWithEmptyStack()
 {
-    const auto a = Bd::Address::parse(ba(0));
+    auto a = Bd::Address::parse(ba(0));
     QVERIFY(a.has_value());
     QVERIFY(a->isLocalNode());
     QCOMPARE(a->size(), 0);
@@ -50,7 +52,7 @@ void TestBiDiB::addressParseBufferWithEmptyStack()
 
 void TestBiDiB::addressParseBufferWithOneEntry()
 {
-    const auto a = Bd::Address::parse(ba(1, 0));
+    auto a = Bd::Address::parse(ba(1, 0));
     QVERIFY(a.has_value());
     QVERIFY(!a->isLocalNode());
     QCOMPARE(a->size(), 1);
@@ -58,7 +60,7 @@ void TestBiDiB::addressParseBufferWithOneEntry()
 
 void TestBiDiB::addressParseBufferWithFourEntries()
 {
-    const auto a = Bd::Address::parse(ba(4, 3, 2, 1, 0));
+    auto a = Bd::Address::parse(ba(4, 3, 2, 1, 0));
     QVERIFY(a.has_value());
     QVERIFY(!a->isLocalNode());
     QCOMPARE(a->size(), 4);
@@ -66,14 +68,14 @@ void TestBiDiB::addressParseBufferWithFourEntries()
 
 void TestBiDiB::addressParseBufferWithFiveEntries()
 {
-    const auto a = Bd::Address::parse(ba(1, 2, 3, 4, 5, 0));
+    auto a = Bd::Address::parse(ba(1, 2, 3, 4, 5, 0));
     QVERIFY(!a.has_value());
     QCOMPARE(a.error(), Bd::Error::AddressTooLong);
 }
 
 void TestBiDiB::addressParseWithoutNullByte()
 {
-    const auto a = Bd::Address::parse(ba(1, 2, 3));
+    auto a = Bd::Address::parse(ba(1, 2, 3));
     QVERIFY(!a.has_value());
     QCOMPARE(a.error(), Bd::Error::AddressMissingTerminator);
 }
@@ -105,7 +107,7 @@ void TestBiDiB::addressDownstream()
 void TestBiDiB::addressDownstreamSelf()
 {
     auto a = Bd::Address::localNode();
-    const auto b = a.downstream();
+    auto b = a.downstream();
     QVERIFY(!b.has_value());
     QCOMPARE(b.error(), Bd::Error::AddressStackEmpty);
     QCOMPARE(a, Bd::Address::localNode());
@@ -135,7 +137,7 @@ void TestBiDiB::addressUpstream()
 void TestBiDiB::addressUpstreamFullStack()
 {
     auto a = *Bd::Address::parse(ba(2, 3, 4, 5, 0));
-    const auto b = a.upstream(1);
+    auto b = a.upstream(1);
     QVERIFY(!b.has_value());
     QCOMPARE(b.error(), Bd::Error::AddressStackFull);
     QCOMPARE(a, *Bd::Address::parse(ba(2, 3, 4, 5, 0)));
@@ -150,11 +152,41 @@ void TestBiDiB::addressSize()
     QCOMPARE(Bd::Address::parse(ba(1, 2, 3, 4, 0))->size(), 4);
 }
 
+void TestBiDiB::addressToByteArray()
+{
+    auto a = *Bd::Address::parse(ba(4, 8, 4, 0));
+    QCOMPARE(a.toByteArray(), ba(4, 8, 4, 0));
+}
+
 void TestBiDiB::messageCreateWithTypeAndPayload()
 {
-    const auto m = Bd::Message(1, ba(1, 2, 3, 4));
+    auto m = Bd::Message(1, ba(1, 2, 3, 4));
     QCOMPARE(m.type(), 1);
     QCOMPARE(m.payload(), ba(1, 2, 3, 4));
+}
+
+void TestBiDiB::messageToSendBuffer()
+{
+    {
+        auto m = Bd::Message(1, ba(10, 20, 30, 40));
+        auto buf = m.toSendBuffer(Bd::Address::localNode(), 42);
+        QVERIFY(buf.has_value());
+        QCOMPARE(buf, ba(7, 0, 42, 1, 10, 20, 30, 40));
+    }
+
+    {
+        auto m = Bd::Message(1, ba(10, 20, 30, 40));
+        auto buf = m.toSendBuffer(*Bd::Address::parse(ba(9, 4, 5, 0)), 99);
+        QVERIFY(buf.has_value());
+        QCOMPARE(buf, ba(10, 9, 4, 5, 0, 99, 1, 10, 20, 30, 40));
+    }
+
+    {
+        auto m = Bd::Message(1, QByteArray(100, 0));
+        auto buf = m.toSendBuffer(*Bd::Address::parse(ba(9, 4, 5, 0)), 99);
+        QVERIFY(!buf.has_value());
+        QCOMPARE(buf.error(), Bd::Error::MessageTooLarge);
+    }
 }
 
 QTEST_MAIN(TestBiDiB)

@@ -3,6 +3,8 @@
 
 namespace Bd {
 
+static constexpr auto MAX_MESSAGE_SIZE = 63;
+
 #define MSG(msg) [MSG_##msg] = #msg
 
 static const char *MessageNames[256] = {
@@ -151,6 +153,20 @@ static const char *MessageNames[256] = {
 QString messageName(quint8 type)
 {
     return MessageNames[type] ? MessageNames[type] : QString::number(type);
+}
+
+tl::expected<QByteArray, Error> Message::toSendBuffer(Address address, quint8 number) const
+{
+    auto size = 3 + address.size() + _payload.size();
+    if (size > MAX_MESSAGE_SIZE)
+        return tl::make_unexpected(Error::MessageTooLarge);
+    QByteArray buf;
+    buf.append(size);
+    buf.append(address.toByteArray());
+    buf.append(number);
+    buf.append(_type);
+    buf.append(_payload);
+    return buf;
 }
 
 } // namespace bdb

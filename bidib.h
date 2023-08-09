@@ -18,12 +18,21 @@ enum class Error {
     AddressStackEmpty,
     AddressStackFull,
     AddressMissingTerminator,
+    MessageTooLarge,
 };
 
 class Address
 {
 public:
     static Address localNode() { return {}; }
+
+    QByteArray toByteArray() const
+    {
+        auto res = QByteArray(reinterpret_cast<const char *>(&_stack), sizeof(_stack));
+        res.resize(size());
+        res.append('\0');
+        return res;
+    }
 
     qsizetype size() const
     {
@@ -106,6 +115,8 @@ public:
     quint8 type() const { return _type; }
     const QByteArray &payload() const { return _payload; }
     QByteArray payload() { return _payload; }
+
+    tl::expected<QByteArray, Error> toSendBuffer(Address address, quint8 number) const;
 
 private:
     quint8 _type{};
