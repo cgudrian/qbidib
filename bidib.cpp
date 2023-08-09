@@ -1,7 +1,7 @@
 #include "bidib.h"
 #include "bidib_messages.h"
 
-namespace bdb {
+namespace Bd {
 
 #define MSG(msg) [MSG_##msg] = #msg
 

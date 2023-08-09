@@ -10,13 +10,13 @@
 
 #include "expected.hpp"
 
-namespace bdb {
+namespace Bd {
 
-enum class error {
-    out_of_data,
-    address_too_large,
-    address_stack_empty,
-    address_stack_full,
+enum class Error {
+    OutOfData,
+    AddressTooLong,
+    AddressStackEmpty,
+    AddressStackFull,
 };
 
 class address
@@ -51,29 +51,29 @@ public:
 
     bool isMe() const { return _stack == 0; }
 
-    tl::expected<address, error> downstream() const
+    tl::expected<address, Error> downstream() const
     {
         if (isMe())
-            return tl::make_unexpected(error::address_stack_empty);
+            return tl::make_unexpected(Error::AddressStackEmpty);
         return address(_stack >> 8);
     }
 
-    tl::expected<address, error> upstream(quint8 next) const
+    tl::expected<address, Error> upstream(quint8 next) const
     {
         if (size() == 4)
-            return tl::make_unexpected(error::address_stack_full);
+            return tl::make_unexpected(Error::AddressStackFull);
         return address(_stack << 8 | next);
     }
 
     bool operator==(const address &rhs) const { return _stack == rhs._stack; }
 
-    static tl::expected<address, error> parse(const QByteArray &ba)
+    static tl::expected<address, Error> parse(const QByteArray &ba)
     {
         if (ba.isEmpty())
-            return tl::make_unexpected(error::out_of_data);
+            return tl::make_unexpected(Error::OutOfData);
         auto size = ba.indexOf('\0');
         if (size > 4)
-            return tl::make_unexpected(error::address_too_large);
+            return tl::make_unexpected(Error::AddressTooLong);
         return address(ba.first(size));
     }
 

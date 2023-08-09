@@ -21,7 +21,7 @@ QDebug operator<<(QDebug d, const BiDiBMessage &msg)
 {
     QString addr = msg.addr.isEmpty() ? QStringLiteral("Self") : msg.addr.toHex('/');
     d << "[" << qUtf8Printable(addr) << "]" << msg.num
-      << qUtf8Printable(bdb::messageName(msg.type)) << qUtf8Printable(msg.data.toHex('-'));
+      << qUtf8Printable(Bd::messageName(msg.type)) << qUtf8Printable(msg.data.toHex('-'));
     return d;
 }
 
