@@ -1,8 +1,10 @@
 #include <QTest>
 
+#include <QSignalSpy>
 #include <iostream>
 
 #include "bidib.h"
+#include "bidib_messages.h"
 
 class TestBiDiB : public QObject
 {
@@ -24,6 +26,11 @@ private slots:
 
     void messageCreateWithTypeAndPayload();
     void messageToSendBuffer();
+
+    void serialTransportProcessContiguousFrame();
+    void serialTransportProcessFragmentedFrame();
+    void serialTransportProcessMultipleFragmentedFrame();
+    void serialTransportSkipLeadingGarbage();
 };
 
 template<typename... Args>
@@ -187,6 +194,55 @@ void TestBiDiB::messageToSendBuffer()
         QVERIFY(!buf.has_value());
         QCOMPARE(buf.error(), Bd::Error::MessageTooLarge);
     }
+}
+
+void TestBiDiB::serialTransportProcessContiguousFrame()
+{
+    Bd::SerialTransport st;
+    QSignalSpy sp(&st, &Bd::SerialTransport::frameReceived);
+    st.processData(ba(BIDIB_PKT_MAGIC, 1, 2, 3, 4, BIDIB_PKT_MAGIC));
+    QCOMPARE(sp.count(), 1);
+    QCOMPARE(sp[0][0], ba(1, 2, 3, 4));
+}
+
+void TestBiDiB::serialTransportProcessFragmentedFrame()
+{
+    Bd::SerialTransport st;
+    QSignalSpy sp(&st, &Bd::SerialTransport::frameReceived);
+    st.processData(ba(BIDIB_PKT_MAGIC, 1, 2));
+    QCOMPARE(sp.count(), 0);
+
+    st.processData(ba(3, 4, BIDIB_PKT_MAGIC));
+    QCOMPARE(sp.count(), 1);
+    QCOMPARE(sp[0][0], ba(1, 2, 3, 4));
+}
+
+void TestBiDiB::serialTransportProcessMultipleFragmentedFrame()
+{
+    Bd::SerialTransport st;
+    QSignalSpy sp(&st, &Bd::SerialTransport::frameReceived);
+    st.processData(ba(BIDIB_PKT_MAGIC, 1, 2));
+    QCOMPARE(sp.count(), 0);
+
+    st.processData(ba(3, 4, BIDIB_PKT_MAGIC, 5, 6, BIDIB_PKT_MAGIC, 7, 8));
+    QCOMPARE(sp.count(), 2);
+    QCOMPARE(sp[0][0], ba(1, 2, 3, 4));
+    QCOMPARE(sp[1][0], ba(5, 6));
+
+    sp.clear();
+
+    st.processData(ba(9, 10, BIDIB_PKT_MAGIC));
+    QCOMPARE(sp.count(), 1);
+    QCOMPARE(sp[0][0], ba(7, 8, 9, 10));
+}
+
+void TestBiDiB::serialTransportSkipLeadingGarbage()
+{
+    Bd::SerialTransport st;
+    QSignalSpy sp(&st, &Bd::SerialTransport::frameReceived);
+    st.processData(ba(5, 6, BIDIB_PKT_MAGIC, 1, 2, 3, 4, BIDIB_PKT_MAGIC));
+    QCOMPARE(sp.count(), 1);
+    QCOMPARE(sp[0][0], ba(1, 2, 3, 4));
 }
 
 QTEST_MAIN(TestBiDiB)

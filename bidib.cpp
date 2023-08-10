@@ -155,6 +155,12 @@ QString messageName(quint8 type)
     return MessageNames[type] ? MessageNames[type] : QString::number(type);
 }
 
+QDebug operator<<(QDebug d, const Address &a)
+{
+    d << QByteArray(reinterpret_cast<const char *>(&a), sizeof(a)).toHex('-');
+    return d;
+}
+
 tl::expected<QByteArray, Error> Message::toSendBuffer(Address address, quint8 number) const
 {
     auto size = 3 + address.size() + _payload.size();
@@ -169,4 +175,46 @@ tl::expected<QByteArray, Error> Message::toSendBuffer(Address address, quint8 nu
     return buf;
 }
 
-} // namespace bdb
+SerialConnection::SerialConnection(const QString &port)
+    : _serial(port)
+{
+    connect(&_serial, &QSerialPort::readyRead, this, &SerialConnection::readData);
+}
+
+void SerialConnection::readData()
+{
+    auto data = _serial.readAll();
+    if (!data.isEmpty())
+        emit dataReceived(data);
+}
+
+void SerialConnection::sendData(const QByteArray &data)
+{
+    _serial.write(data);
+}
+
+void SerialTransport::processData(const QByteArray &data)
+{
+    auto from = 0;
+    auto to = data.indexOf(BIDIB_PKT_MAGIC, from);
+
+    // skip leading garbage
+    if (_currentFrame.isEmpty() && to > 0)
+        from = to;
+
+    while (to >= 0) {
+        auto count = to - from;
+        if (count) {
+            _currentFrame.append(data.sliced(from, count));
+            if (!_currentFrame.isEmpty()) {
+                emit frameReceived(_currentFrame);
+                _currentFrame.clear();
+            }
+        }
+        from = to + 1;
+        to = data.indexOf(BIDIB_PKT_MAGIC, from);
+    }
+    _currentFrame.append(data.sliced(from));
+}
+
+} // namespace Bd

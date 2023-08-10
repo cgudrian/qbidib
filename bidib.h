@@ -3,6 +3,8 @@
 #include <QByteArray>
 #include <QDebug>
 #include <QList>
+#include <QObject>
+#include <QSerialPort>
 #include <QString>
 
 #include <experimental/propagate_const>
@@ -95,14 +97,10 @@ private:
 
     quint32 _stack{};
 
-    friend QDebug operator<<(QDebug d, const Address &a);
+    friend  QDebug operator<<(QDebug d, const Address &a);
 };
 
-QDebug operator<<(QDebug d, const Address &a)
-{
-    d << QByteArray(reinterpret_cast<const char *>(&a), sizeof(a)).toHex('-');
-    return d;
-}
+QDebug operator<<(QDebug d, const Address &a);
 
 class Message
 {
@@ -121,6 +119,40 @@ public:
 private:
     quint8 _type{};
     QByteArray _payload{};
+};
+
+class SerialConnection : public QObject
+{
+    Q_OBJECT
+
+signals:
+    void dataReceived(const QByteArray &data);
+
+public slots:
+    void sendData(const QByteArray &data);
+
+public:
+    explicit SerialConnection(const QString &port);
+
+private slots:
+    void readData();
+
+private:
+    QSerialPort _serial;
+};
+
+class SerialTransport : public QObject
+{
+    Q_OBJECT
+
+signals:
+    void frameReceived(const QByteArray &frame);
+
+public slots:
+    void processData(const QByteArray &data);
+
+private:
+    QByteArray _currentFrame;
 };
 
 QString messageName(quint8 type);

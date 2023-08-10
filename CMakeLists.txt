@@ -18,7 +18,7 @@ qt_standard_project_setup(REQUIRES 6.5)
 qt_add_library(bidib
     bidib.h bidib.cpp
 )
-target_link_libraries(bidib PUBLIC Qt6::Core)
+target_link_libraries(bidib PUBLIC Qt6::Core Qt6::SerialPort)
 
 qt_add_executable(bidib-test tst_bidib.cpp)
 target_link_libraries(bidib-test PRIVATE Qt6::Test bidib)
