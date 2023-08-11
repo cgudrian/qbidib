@@ -32,7 +32,9 @@ private slots:
     void serialTransportProcessFragmentedFrame();
     void serialTransportProcessMultipleFragmentedFrame();
     void serialTransportSkipLeadingGarbage();
+    void serialTransportEscape_data();
     void serialTransportEscape();
+    void serialTransportUnescape_data();
     void serialTransportUnescape();
 
     void computeCrc8();
@@ -250,48 +252,78 @@ void TestBiDiB::serialTransportSkipLeadingGarbage()
     QCOMPARE(sp[0][0], ba(1, 2, 3, 4));
 }
 
+void TestBiDiB::serialTransportEscape_data()
+{
+    QTest::addColumn<QByteArray>("escaped");
+    QTest::addColumn<QByteArray>("unescaped");
+    QTest::addRow("empty buffer") << QByteArray{} << QByteArray{};
+    QTest::addRow("no escaping") << ba(1, 2, 3, 4) << ba(1, 2, 3, 4);
+
+    QTest::addRow("single escape byte")
+        << ba(BIDIB_PKT_ESCAPE, BIDIB_PKT_ESCAPE ^ 0x20) << ba(BIDIB_PKT_ESCAPE);
+
+    QTest::addRow("single magic byte")
+        << ba(BIDIB_PKT_ESCAPE, BIDIB_PKT_MAGIC ^ 0x20) << ba(BIDIB_PKT_MAGIC);
+
+    QTest::addRow("multiple escaping") << ba(1,
+                                             2,
+                                             BIDIB_PKT_ESCAPE,
+                                             BIDIB_PKT_ESCAPE ^ 0x20,
+                                             3,
+                                             4,
+                                             BIDIB_PKT_ESCAPE,
+                                             BIDIB_PKT_MAGIC ^ 0x20,
+                                             5,
+                                             6)
+                                       << ba(1, 2, BIDIB_PKT_ESCAPE, 3, 4, BIDIB_PKT_MAGIC, 5, 6);
+}
+
 void TestBiDiB::serialTransportEscape()
 {
-    QCOMPARE(Bd::SerialTransport::escape(ba(1, 2, 3, 4)), ba(1, 2, 3, 4));
-    QCOMPARE(Bd::SerialTransport::escape({}), QByteArray{});
-    QCOMPARE(Bd::SerialTransport::escape(ba(BIDIB_PKT_MAGIC)),
-             ba(BIDIB_PKT_ESCAPE, BIDIB_PKT_MAGIC ^ 0x20));
-    QCOMPARE(Bd::SerialTransport::escape(ba(BIDIB_PKT_ESCAPE)),
-             ba(BIDIB_PKT_ESCAPE, BIDIB_PKT_ESCAPE ^ 0x20));
-    QCOMPARE(Bd::SerialTransport::escape(ba(1, 2, BIDIB_PKT_ESCAPE, 3, 4, BIDIB_PKT_MAGIC, 5, 6)),
-             ba(1,
-                2,
-                BIDIB_PKT_ESCAPE,
-                BIDIB_PKT_ESCAPE ^ 0x20,
-                3,
-                4,
-                BIDIB_PKT_ESCAPE,
-                BIDIB_PKT_MAGIC ^ 0x20,
-                5,
-                6));
+    QFETCH(QByteArray, unescaped);
+    QFETCH(QByteArray, escaped);
+    QCOMPARE(Bd::SerialTransport::escape(unescaped), escaped);
+}
+
+void TestBiDiB::serialTransportUnescape_data()
+{
+    using Expect = tl::expected<QByteArray, Bd::Error>;
+
+    QTest::addColumn<QByteArray>("escaped");
+    QTest::addColumn<Expect>("unescaped");
+    QTest::addRow("empty buffer") << QByteArray{} << Expect{QByteArray{}};
+    QTest::addRow("no escaping") << ba(1, 2, 3, 4) << Expect{ba(1, 2, 3, 4)};
+
+    QTest::addRow("single escape byte")
+        << ba(BIDIB_PKT_ESCAPE, BIDIB_PKT_ESCAPE ^ 0x20) << Expect{ba(BIDIB_PKT_ESCAPE)};
+
+    QTest::addRow("single magic byte")
+        << ba(BIDIB_PKT_ESCAPE, BIDIB_PKT_MAGIC ^ 0x20) << Expect{ba(BIDIB_PKT_MAGIC)};
+
+    QTest::addRow("multiple escaping")
+        << ba(1,
+              2,
+              BIDIB_PKT_ESCAPE,
+              BIDIB_PKT_ESCAPE ^ 0x20,
+              3,
+              4,
+              BIDIB_PKT_ESCAPE,
+              BIDIB_PKT_MAGIC ^ 0x20,
+              5,
+              6)
+        << Expect{ba(1, 2, BIDIB_PKT_ESCAPE, 3, 4, BIDIB_PKT_MAGIC, 5, 6)};
+
+    QTest::addRow("trailing escape byte")
+        << ba(1, 2, 3, BIDIB_PKT_ESCAPE)
+        << Expect{tl::make_unexpected(Bd::Error::EscapingIncomplete)};
 }
 
 void TestBiDiB::serialTransportUnescape()
 {
-    QCOMPARE(Bd::SerialTransport::unescape(ba(1, 2, 3, 4)), ba(1, 2, 3, 4));
-    QCOMPARE(Bd::SerialTransport::unescape({}), QByteArray{});
-    QCOMPARE(Bd::SerialTransport::unescape(ba(BIDIB_PKT_ESCAPE, BIDIB_PKT_ESCAPE ^ 0x20)),
-             ba(BIDIB_PKT_ESCAPE));
-    QCOMPARE(Bd::SerialTransport::unescape(ba(BIDIB_PKT_ESCAPE, BIDIB_PKT_MAGIC ^ 0x20)),
-             ba(BIDIB_PKT_MAGIC));
-    QCOMPARE(Bd::SerialTransport::unescape(ba(1,
-                                              2,
-                                              BIDIB_PKT_ESCAPE,
-                                              BIDIB_PKT_ESCAPE ^ 0x20,
-                                              3,
-                                              4,
-                                              BIDIB_PKT_ESCAPE,
-                                              BIDIB_PKT_MAGIC ^ 0x20,
-                                              5,
-                                              6)),
-             ba(1, 2, BIDIB_PKT_ESCAPE, 3, 4, BIDIB_PKT_MAGIC, 5, 6));
-    QCOMPARE(Bd::SerialTransport::unescape(ba(1, 2, 3, BIDIB_PKT_ESCAPE)),
-             tl::make_unexpected(Bd::Error::EscapingIncomplete));
+    using T = tl::expected<QByteArray, Bd::Error>;
+    QFETCH(QByteArray, escaped);
+    QFETCH(T, unescaped);
+    QCOMPARE(Bd::SerialTransport::unescape(escaped), unescaped);
 }
 
 void TestBiDiB::computeCrc8()
