@@ -17,6 +17,7 @@ qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_library(bidib
     bidib.h bidib.cpp
+    crc.h crc.cpp
 )
 target_link_libraries(bidib PUBLIC Qt6::Core Qt6::SerialPort)
 

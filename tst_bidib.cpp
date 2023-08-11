@@ -5,6 +5,7 @@
 
 #include "bidib.h"
 #include "bidib_messages.h"
+#include "crc.h"
 
 class TestBiDiB : public QObject
 {
@@ -31,6 +32,10 @@ private slots:
     void serialTransportProcessFragmentedFrame();
     void serialTransportProcessMultipleFragmentedFrame();
     void serialTransportSkipLeadingGarbage();
+    void serialTransportEscape();
+    void serialTransportUnescape();
+
+    void computeCrc8();
 };
 
 template<typename... Args>
@@ -243,6 +248,56 @@ void TestBiDiB::serialTransportSkipLeadingGarbage()
     st.processData(ba(5, 6, BIDIB_PKT_MAGIC, 1, 2, 3, 4, BIDIB_PKT_MAGIC));
     QCOMPARE(sp.count(), 1);
     QCOMPARE(sp[0][0], ba(1, 2, 3, 4));
+}
+
+void TestBiDiB::serialTransportEscape()
+{
+    QCOMPARE(Bd::SerialTransport::escape(ba(1, 2, 3, 4)), ba(1, 2, 3, 4));
+    QCOMPARE(Bd::SerialTransport::escape({}), QByteArray{});
+    QCOMPARE(Bd::SerialTransport::escape(ba(BIDIB_PKT_MAGIC)),
+             ba(BIDIB_PKT_ESCAPE, BIDIB_PKT_MAGIC ^ 0x20));
+    QCOMPARE(Bd::SerialTransport::escape(ba(BIDIB_PKT_ESCAPE)),
+             ba(BIDIB_PKT_ESCAPE, BIDIB_PKT_ESCAPE ^ 0x20));
+    QCOMPARE(Bd::SerialTransport::escape(ba(1, 2, BIDIB_PKT_ESCAPE, 3, 4, BIDIB_PKT_MAGIC, 5, 6)),
+             ba(1,
+                2,
+                BIDIB_PKT_ESCAPE,
+                BIDIB_PKT_ESCAPE ^ 0x20,
+                3,
+                4,
+                BIDIB_PKT_ESCAPE,
+                BIDIB_PKT_MAGIC ^ 0x20,
+                5,
+                6));
+}
+
+void TestBiDiB::serialTransportUnescape()
+{
+    QCOMPARE(Bd::SerialTransport::unescape(ba(1, 2, 3, 4)), ba(1, 2, 3, 4));
+    QCOMPARE(Bd::SerialTransport::unescape({}), QByteArray{});
+    QCOMPARE(Bd::SerialTransport::unescape(ba(BIDIB_PKT_ESCAPE, BIDIB_PKT_ESCAPE ^ 0x20)),
+             ba(BIDIB_PKT_ESCAPE));
+    QCOMPARE(Bd::SerialTransport::unescape(ba(BIDIB_PKT_ESCAPE, BIDIB_PKT_MAGIC ^ 0x20)),
+             ba(BIDIB_PKT_MAGIC));
+    QCOMPARE(Bd::SerialTransport::unescape(ba(1,
+                                              2,
+                                              BIDIB_PKT_ESCAPE,
+                                              BIDIB_PKT_ESCAPE ^ 0x20,
+                                              3,
+                                              4,
+                                              BIDIB_PKT_ESCAPE,
+                                              BIDIB_PKT_MAGIC ^ 0x20,
+                                              5,
+                                              6)),
+             ba(1, 2, BIDIB_PKT_ESCAPE, 3, 4, BIDIB_PKT_MAGIC, 5, 6));
+    QCOMPARE(Bd::SerialTransport::unescape(ba(1, 2, 3, BIDIB_PKT_ESCAPE)),
+             tl::make_unexpected(Bd::Error::EscapingIncomplete));
+}
+
+void TestBiDiB::computeCrc8()
+{
+    QCOMPARE(Bd::computeCrc8(QByteArray::fromHex("0370dd47b501c724eabc016f747c7349")), 0x1e);
+    QCOMPARE(Bd::computeCrc8(QByteArray::fromHex("0370dd47b501c724eabc016f747c73491e")), 0);
 }
 
 QTEST_MAIN(TestBiDiB)

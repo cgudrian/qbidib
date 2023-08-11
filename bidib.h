@@ -21,6 +21,7 @@ enum class Error {
     AddressStackFull,
     AddressMissingTerminator,
     MessageTooLarge,
+    EscapingIncomplete,
 };
 
 class Address
@@ -150,6 +151,10 @@ signals:
 
 public slots:
     void processData(const QByteArray &data);
+
+public:
+    static QByteArray escape(const QByteArray &ba);
+    static tl::expected<QByteArray, Error> unescape(const QByteArray &ba);
 
 private:
     QByteArray _currentFrame;
