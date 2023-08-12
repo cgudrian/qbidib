@@ -795,6 +795,7 @@ typedef struct __attribute__((__packed__)) // t_bidib_cs_prog_state
 #define FEATURE_CELL_NUMBER 112             // (logical) reference mark of generator (0=single system, 1..n:'area mark')
 #define FEATURE_RF_CHANNEL 113              // used rf channel, 0..83 channel assignment in 2.4 GHz band
 
+#define FEATURE_STRING_NAMESPACES_AVAILABLE 250
 #define FEATURE_STRING_DEBUG 251      // use namespace 1 for debug strings, 0:n.a./silent (default); 1=mode 1
 #define FEATURE_STRING_SIZE 252       // length of user strings, 0:n.a (default); allowed 8..24
 #define FEATURE_RELEVANT_PID_BITS 253 // how many bits of 'vendor32' are relevant for PID (default 16, LSB aligned)
