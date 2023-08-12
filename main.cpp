@@ -402,14 +402,14 @@ typedef struct __attribute__((__packed__)) // t_bidib_cs_drive
         {
             uint8_t f4_f1 : 4; // functions f4..f1
             uint8_t light : 1; // f0
-            uint8_t fill : 3; // 3 bits as usable space (ie. to store f29-f31 on a node)
+            uint8_t fill : 3;  // 3 bits as usable space (ie. to store f29-f31 on a node)
         };
         uint8_t f4_f0;
     };
     union {
         struct
         {
-            uint8_t f8_f5 : 4; // functions f8..f5
+            uint8_t f8_f5 : 4;  // functions f8..f5
             uint8_t f12_f9 : 4; // functions f12..f9
         };
         uint8_t f12_f5;
@@ -477,8 +477,8 @@ struct Version
 static_assert(sizeof(Version) == 3);
 
 #define HANDLE(msg, ...) \
-    HandlerRegistration _reg_##msg{this, msg, &BiDiBNode::handle_##msg}; \
-    void handle_##msg(__VA_ARGS__)
+    HandlerRegistration __reg_##msg{this, msg, &BiDiBNode::__handle_##msg}; \
+    void __handle_##msg(__VA_ARGS__)
 
 template<typename K = quint8, typename V = K>
 struct KeyValue
@@ -567,12 +567,11 @@ public:
         registerStaticReply(MSG_SYS_GET_MAGIC, makeMessage<quint16>(MSG_SYS_MAGIC, BIDIB_SYS_MAGIC));
         registerStaticReply(MSG_FEATURE_GETNEXT, FeatureNA);
         registerStaticReply(MSG_SYS_GET_SW_VERSION,
-                            makeMessage<Version>(MSG_SYS_SW_VERSION, {1, 0, 0}));
+                            makeMessage(MSG_SYS_SW_VERSION, Version{1, 0, 0}));
         registerStaticReply(MSG_NODETAB_GETNEXT, NodeNA);
         registerStaticReply(MSG_SYS_GET_P_VERSION,
-                            makeMessage<quint16>(MSG_SYS_P_VERSION, BIDIB_VERSION));
-        registerStaticReply(MSG_SYS_GET_UNIQUE_ID,
-                            makeMessage<UniqueId>(MSG_SYS_UNIQUE_ID, MyUniqueId));
+                            makeMessage(MSG_SYS_P_VERSION, quint16{BIDIB_VERSION}));
+        registerStaticReply(MSG_SYS_GET_UNIQUE_ID, makeMessage(MSG_SYS_UNIQUE_ID, MyUniqueId));
 
         _measurementTimer.setInterval(1000);
         connect(&_measurementTimer, &QTimer::timeout, this, [this] {
