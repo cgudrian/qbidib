@@ -88,6 +88,7 @@ struct Unpacker
                 u.avail = 0;
                 return tl::make_unexpected(Error::OutOfData);
             }
+            auto s = QString::fromLatin1(u.buf, *len);
             return u.extract(QString::fromLatin1(u.buf, *len), *len);
         }
     };
@@ -97,11 +98,10 @@ struct Unpacker
     {
         tl::expected<std::optional<T>, Error> get(Unpacker &u)
         {
-            if (u.avail < sizeof(T)) {
-                u.avail = 0;
-                return std::nullopt;
-            }
-            return u.get<T>();
+            auto val = u.get<T>();
+            if (val)
+                return *val;
+            return std::nullopt;
         }
     };
 };
@@ -142,6 +142,11 @@ tl::expected<std::tuple<Args...>, Error> unpack(QByteArray const &ba)
     Unpacker u(ba);
     auto unpacked = std::make_tuple(u.get<Args>()...);
     return unwrapExpected(unpacked);
+}
+
+tl::expected<std::tuple<>, Error> unpack(QByteArray const &)
+{
+    return {};
 }
 
 } // namespace Bd
