@@ -1,4 +1,4 @@
-#include <bidib/node.h>
+#include "node.h"
 
 namespace Bd {
 

@@ -1,9 +1,10 @@
 #pragma once
 
-#include <QObject>
-#include <QSerialPort>
+#include <QtCore/QObject>
 
 namespace Bd {
+
+class SerialConnectionPrivate;
 
 class SerialConnection : public QObject
 {
@@ -22,7 +23,7 @@ private slots:
     void readData();
 
 private:
-    QSerialPort _serial;
+    Q_DECLARE_PRIVATE(SerialConnection)
 };
 
 } // namespace Bd

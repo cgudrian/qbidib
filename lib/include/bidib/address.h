@@ -2,9 +2,12 @@
 
 #include <bidib/error.h>
 
-#include <QByteArray>
+#include <QtCore/QtTypes>
 
 #include <expected.hpp>
+
+class QByteArray;
+class QDebug;
 
 namespace Bd {
 

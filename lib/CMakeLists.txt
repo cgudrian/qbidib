@@ -8,9 +8,11 @@ qt_add_library(bidib
     include/bidib/serialtransport.h serialtransport.cpp
 
     crc.h crc.cpp
+    messagenames.cpp
 )
+target_include_directories(bidib PRIVATE include/bidib)
 target_include_directories(bidib PUBLIC ../tl include)
-target_link_libraries(bidib PUBLIC Qt6::Core Qt6::SerialPort)
+target_link_libraries(bidib PUBLIC Qt6::Core Qt6::CorePrivate Qt6::SerialPort)
 
 qt_add_executable(bidib-test tst_bidib.cpp)
 target_link_libraries(bidib-test PRIVATE Qt6::Test bidib)

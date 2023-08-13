@@ -1,6 +1,6 @@
 #pragma once
 
-#include <QObject>
+#include <QtCore/QObject>
 
 #include <bidib/message.h>
 

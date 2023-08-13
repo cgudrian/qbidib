@@ -3,11 +3,11 @@
 #include <bidib/address.h>
 #include <bidib/error.h>
 
-#include <QString>
+#include <QtCore/QByteArray>
 
 #include <expected.hpp>
 
-class QByteArray;
+class QString;
 
 namespace Bd {
 

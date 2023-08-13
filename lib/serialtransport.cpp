@@ -1,30 +1,46 @@
-#include <bidib/serialtransport.h>
-#include <bidib/bidib_messages.h>
+#include "serialtransport.h"
+#include "bidib_messages.h"
+
+#include <QtCore/private/qobject_p.h>
 
 namespace Bd {
 
+class SerialTransportPrivate : public QObjectPrivate
+{
+public:
+    Q_DECLARE_PUBLIC(SerialTransport)
+
+    QByteArray currentFrame;
+};
+
+SerialTransport::SerialTransport()
+    : QObject(*new SerialTransportPrivate)
+{}
+
 void SerialTransport::processData(const QByteArray &data)
 {
+    Q_D(SerialTransport);
+
     auto from = 0;
     auto to = data.indexOf(BIDIB_PKT_MAGIC, from);
 
     // skip leading garbage
-    if (_currentFrame.isEmpty() && to > 0)
+    if (d->currentFrame.isEmpty() && to > 0)
         from = to;
 
     while (to >= 0) {
         auto count = to - from;
         if (count) {
-            _currentFrame.append(data.sliced(from, count));
-            if (!_currentFrame.isEmpty()) {
-                emit frameReceived(_currentFrame);
-                _currentFrame.clear();
+            d->currentFrame.append(data.sliced(from, count));
+            if (!d->currentFrame.isEmpty()) {
+                emit frameReceived(d->currentFrame);
+                d->currentFrame.clear();
             }
         }
         from = to + 1;
         to = data.indexOf(BIDIB_PKT_MAGIC, from);
     }
-    _currentFrame.append(data.sliced(from));
+    d->currentFrame.append(data.sliced(from));
 }
 
 QByteArray SerialTransport::escape(const QByteArray &ba)

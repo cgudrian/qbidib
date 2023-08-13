@@ -2,11 +2,13 @@
 
 #include <bidib/error.h>
 
-#include <QObject>
+#include <QtCore/QObject>
 
 #include <expected.hpp>
 
 namespace Bd {
+
+class SerialTransportPrivate;
 
 class SerialTransport : public QObject
 {
@@ -22,8 +24,10 @@ public:
     static QByteArray escape(const QByteArray &ba);
     static tl::expected<QByteArray, Error> unescape(const QByteArray &ba);
 
+    SerialTransport();
+
 private:
-    QByteArray _currentFrame;
+    Q_DECLARE_PRIVATE(SerialTransport)
 };
 
 } // namespace Bd
