@@ -17,7 +17,7 @@ SerialTransport::SerialTransport()
     : QObject(*new SerialTransportPrivate)
 {}
 
-void SerialTransport::processData(const QByteArray &data)
+void SerialTransport::processData(QByteArray const &data)
 {
     Q_D(SerialTransport);
 
@@ -43,7 +43,7 @@ void SerialTransport::processData(const QByteArray &data)
     d->currentFrame.append(data.sliced(from));
 }
 
-QByteArray SerialTransport::escape(const QByteArray &ba)
+QByteArray SerialTransport::escape(QByteArray const &ba)
 {
     if (ba.isEmpty())
         return {};
@@ -62,7 +62,7 @@ QByteArray SerialTransport::escape(const QByteArray &ba)
     return result;
 }
 
-tl::expected<QByteArray, Error> SerialTransport::unescape(const QByteArray &ba)
+tl::expected<QByteArray, Error> SerialTransport::unescape(QByteArray const &ba)
 {
     if (ba.isEmpty())
         return {};

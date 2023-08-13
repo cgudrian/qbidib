@@ -56,7 +56,7 @@ private slots:
     void unpackerUnpackNothing();
     void unpackerUnpackOptionalValue();
     void unpackerUnpackOptionalString();
-    void unpackerUnpackTooMuch();
+    void unpackerUnpackOutOfData();
     void unpackerTerminateAfterFirstError();
 };
 
@@ -452,7 +452,7 @@ void TestBiDiB::unpackerUnpackOptionalString()
     QCOMPARE(t5, std::make_tuple(1, "Größenwahn"));
 }
 
-void TestBiDiB::unpackerUnpackTooMuch()
+void TestBiDiB::unpackerUnpackOutOfData()
 {
     auto t = Bd::unpack<quint8, quint8>(ba(1));
     QVERIFY(!t.has_value());

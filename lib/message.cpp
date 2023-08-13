@@ -12,7 +12,7 @@ QString messageName(quint8 type)
     return MessageNames[type] ? MessageNames[type] : QString::number(type);
 }
 
-Message::Message(quint8 type, const QByteArray &payload)
+Message::Message(quint8 type, QByteArray const &payload)
     : _type(type)
     , _payload(payload)
 {}

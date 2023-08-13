@@ -1,9 +1,16 @@
 #include "node.h"
 
+#include <QtCore/private/qobject_p.h>
+
 namespace Bd {
 
-void Node::handleMessage(const Message &m) {}
+class NodePrivate : public QObjectPrivate
+{};
 
-Node::Node() {}
+void Node::handleMessage(Message const &m) {}
+
+Node::Node()
+    : QObject(*new NodePrivate)
+{}
 
 } // namespace Bd

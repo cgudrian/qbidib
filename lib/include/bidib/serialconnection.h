@@ -11,13 +11,13 @@ class SerialConnection : public QObject
     Q_OBJECT
 
 signals:
-    void dataReceived(const QByteArray &data);
+    void dataReceived(QByteArray const &data);
 
 public slots:
-    void sendData(const QByteArray &data);
+    void sendData(QByteArray const &data);
 
 public:
-    explicit SerialConnection(const QString &port);
+    explicit SerialConnection(QString const &port);
 
 private slots:
     void readData();

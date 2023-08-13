@@ -14,7 +14,7 @@ namespace Bd {
 class Message
 {
 public:
-    explicit Message(quint8 type, const QByteArray &payload);
+    explicit Message(quint8 type, QByteArray const &payload);
     quint8 type() const;
     const QByteArray &payload() const;
     tl::expected<QByteArray, Error> toSendBuffer(Address address, quint8 number) const;

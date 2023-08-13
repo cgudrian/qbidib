@@ -6,17 +6,23 @@
 
 namespace Bd {
 
+class NodePrivate;
+
 class Node : public QObject
 {
     Q_OBJECT
 
 signals:
-    void messageOut(Message const &m);
+    void messageToSend(Message const &m);
+
 public slots:
     void handleMessage(Message const &m);
 
 public:
     Node();
+
+private:
+    Q_DECLARE_PRIVATE(Node)
 };
 
 }

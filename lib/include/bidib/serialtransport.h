@@ -15,14 +15,14 @@ class SerialTransport : public QObject
     Q_OBJECT
 
 signals:
-    void frameReceived(const QByteArray &frame);
+    void frameReceived(QByteArray const &frame);
 
 public slots:
-    void processData(const QByteArray &data);
+    void processData(QByteArray const &data);
 
 public:
-    static QByteArray escape(const QByteArray &ba);
-    static tl::expected<QByteArray, Error> unescape(const QByteArray &ba);
+    static QByteArray escape(QByteArray const &ba);
+    static tl::expected<QByteArray, Error> unescape(QByteArray const &ba);
 
     SerialTransport();
 

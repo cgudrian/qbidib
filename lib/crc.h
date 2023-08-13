@@ -4,6 +4,6 @@
 
 namespace Bd {
 
-quint8 computeCrc8(const QByteArray &ba);
+quint8 computeCrc8(QByteArray const &ba);
 
 }

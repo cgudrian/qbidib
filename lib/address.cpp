@@ -64,12 +64,12 @@ tl::expected<void, Error> Address::upstream(quint8 node)
     return {};
 }
 
-bool Address::operator==(const Address &rhs) const
+bool Address::operator==(Address const &rhs) const
 {
     return _stack == rhs._stack;
 }
 
-tl::expected<Address, Error> Address::parse(const QByteArray &ba)
+tl::expected<Address, Error> Address::parse(QByteArray const &ba)
 {
     if (ba.isEmpty())
         return tl::make_unexpected(Error::OutOfData);
@@ -81,7 +81,7 @@ tl::expected<Address, Error> Address::parse(const QByteArray &ba)
     return Address(ba.first(size));
 }
 
-QDebug operator<<(QDebug d, const Address &a)
+QDebug operator<<(QDebug d, Address const &a)
 {
     d << QByteArray(reinterpret_cast<const char *>(&a), sizeof(a)).toHex('-');
     return d;

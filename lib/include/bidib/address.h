@@ -20,8 +20,8 @@ public:
     bool isLocalNode() const;
     tl::expected<quint8, Error> downstream();
     tl::expected<void, Error> upstream(quint8 node);
-    bool operator==(const Address &rhs) const;
-    static tl::expected<Address, Error> parse(const QByteArray &ba);
+    bool operator==(Address const &rhs) const;
+    static tl::expected<Address, Error> parse(QByteArray const &ba);
 
 private:
     Address();
@@ -30,9 +30,9 @@ private:
 
     quint32 _stack{};
 
-    friend QDebug operator<<(QDebug d, const Address &a);
+    friend QDebug operator<<(QDebug d, Address const &a);
 };
 
-QDebug operator<<(QDebug d, const Address &a);
+QDebug operator<<(QDebug d, Address const &a);
 
 } // namespace Bd

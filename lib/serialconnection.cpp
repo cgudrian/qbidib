@@ -13,7 +13,7 @@ public:
     QSerialPort serial;
 };
 
-SerialConnection::SerialConnection(const QString &port)
+SerialConnection::SerialConnection(QString const &port)
     : QObject(*new SerialConnectionPrivate)
 {
     Q_D(SerialConnection);
@@ -28,7 +28,7 @@ void SerialConnection::readData()
         emit dataReceived(data);
 }
 
-void SerialConnection::sendData(const QByteArray &data)
+void SerialConnection::sendData(QByteArray const &data)
 {
     Q_D(SerialConnection);
     d->serial.write(data);
