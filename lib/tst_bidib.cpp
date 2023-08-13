@@ -6,8 +6,11 @@
 #include <bidib/address.h>
 #include <bidib/bidib_messages.h>
 #include <bidib/message.h>
+#include <bidib/pack.h>
 #include <bidib/serialtransport.h>
 
+#include "QtTest/qtestcase.h"
+#include "bidib/pack.h"
 #include "crc.h"
 
 class TestBiDiB : public QObject
@@ -41,7 +44,15 @@ private slots:
     void serialTransportUnescape();
 
     void computeCrc8();
+
+    void packer();
+    void unpacker();
 };
+
+QByteArray ba()
+{
+    return {};
+}
 
 template<typename... Args>
 QByteArray ba(Args... args)
@@ -333,6 +344,49 @@ void TestBiDiB::computeCrc8()
 {
     QCOMPARE(Bd::computeCrc8(QByteArray::fromHex("0370dd47b501c724eabc016f747c7349")), 0x1e);
     QCOMPARE(Bd::computeCrc8(QByteArray::fromHex("0370dd47b501c724eabc016f747c73491e")), 0);
+}
+
+struct S
+{
+    quint8 x;
+    quint8 y;
+
+    friend bool operator==(S const &lhs, S const &rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
+};
+
+void TestBiDiB::packer()
+{
+    QCOMPARE(Bd::pack(quint8(1), quint16(2), quint32(3)), ba(1, 2, 0, 3, 0, 0, 0));
+    QCOMPARE(Bd::pack("Hallo, Welt!"), ba(12).append("Hallo, Welt!"));
+    QCOMPARE(Bd::pack(S{42, 43}), ba(42, 43));
+    QCOMPARE(Bd::pack(), ba());
+}
+
+void TestBiDiB::unpacker()
+{
+    auto t1 = Bd::unpack<quint8, quint16, quint32>(ba(1, 2, 0, 3, 0, 0, 0));
+    QVERIFY(t1.has_value());
+    QCOMPARE(t1, std::make_tuple(1, 2, 3));
+
+    auto t2 = Bd::unpack<QString>(ba(12).append("Hallo, Welt!"));
+    QVERIFY(t2.has_value());
+    QCOMPARE(t2, std::make_tuple("Hallo, Welt!"));
+
+    auto t3 = Bd::unpack<S>(ba(42, 43));
+    QVERIFY(t3.has_value());
+    QCOMPARE(t3, std::make_tuple(S{42, 43}));
+
+    auto t4 = Bd::unpack<quint8, std::optional<quint8>>(ba(1, 2));
+    QVERIFY(t4.has_value());
+    QCOMPARE(t4, std::make_tuple(1, 2));
+
+    auto t5 = Bd::unpack<quint8, std::optional<quint8>>(ba(1));
+    QVERIFY(t5.has_value());
+    QCOMPARE(t5, std::make_tuple(1, std::nullopt));
+
+    auto t6 = Bd::unpack<quint8, quint8>(ba(1));
+    QVERIFY(!t6.has_value());
+    QCOMPARE(t6.error(), Bd::Error::OutOfData);
 }
 
 QTEST_MAIN(TestBiDiB)

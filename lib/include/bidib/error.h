@@ -1,6 +1,10 @@
 #pragma once
 
+#include <QtCore/QObject>
+
 namespace Bd {
+
+Q_NAMESPACE
 
 enum class Error {
     OutOfData,
@@ -11,5 +15,7 @@ enum class Error {
     MessageTooLarge,
     EscapingIncomplete,
 };
+
+Q_ENUM_NS(Error);
 
 }

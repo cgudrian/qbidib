@@ -9,6 +9,7 @@
 
 #include <bidib/bidib_messages.h>
 #include <bidib/message.h>
+#include <bidib/pack.h>
 
 #include "expected.hpp"
 
@@ -48,36 +49,6 @@ const quint8 crcTable[] = {0,   94,  188, 226, 97,  63,  221, 131, 194, 156, 126
                            246, 168, 116, 42,  200, 150, 21,  75,  169, 247, 182, 232, 10,  84,
                            215, 137, 107, 53};
 
-struct Packer
-{
-    QByteArray ba;
-
-    Packer() { ba.reserve(64); }
-
-    template<class T>
-    Packer &operator<<(T const &t)
-    {
-        ba.append(reinterpret_cast<const char *>(&t), sizeof(T));
-        return *this;
-    }
-
-    Packer &operator<<(char const *s)
-    {
-        quint8 len = std::min(255ul, strlen(s));
-        ba.append(len);
-        ba.append(s, len);
-        return *this;
-    }
-
-    Packer &operator<<(QString const &s)
-    {
-        quint8 len = std::min(255ll, s.length());
-        ba.append(len);
-        ba.append(s.toLatin1().constData(), len);
-        return *this;
-    }
-};
-
 struct Time
 {
     quint8 minute : 6;
@@ -90,109 +61,6 @@ struct Time
     quint8 t4 : 2;
 };
 static_assert(sizeof(Time) == 4);
-
-struct Unpacker
-{
-    const char *buf;
-    size_t avail;
-
-    Unpacker(QByteArray const &ba)
-        : buf(ba.constData())
-        , avail(ba.size())
-    {}
-
-    auto bufferOverflow()
-    {
-        static auto const e = tl::make_unexpected(QStringLiteral("out of data"));
-        avail = 0;
-        return e;
-    }
-
-    template<typename T>
-    T extract(T t, size_t bytes = sizeof(T))
-    {
-        buf += bytes;
-        avail -= bytes;
-        return t;
-    }
-
-    template<class T>
-    tl::expected<T, QString> get()
-    {
-        return Getter<T>{}.get(*this);
-    }
-
-    template<typename T>
-    struct Getter
-    {
-        tl::expected<T, QString> get(Unpacker &u)
-        {
-            if (u.avail < sizeof(T))
-                return u.bufferOverflow();
-            return u.extract(*reinterpret_cast<const T *>(u.buf));
-        }
-    };
-
-    template<>
-    struct Getter<QString>
-    {
-        tl::expected<QString, QString> get(Unpacker &u)
-        {
-            auto len = u.get<quint8>();
-            if (!len)
-                return len.error();
-            if (u.avail < *len)
-                return u.bufferOverflow();
-            return u.extract(QString::fromLatin1(u.buf, *len), *len);
-        }
-    };
-
-    template<typename T>
-    struct Getter<std::optional<T>>
-    {
-        tl::expected<std::optional<T>, QString> get(Unpacker &u)
-        {
-            if (u.avail < sizeof(T)) {
-                u.avail = 0;
-                return std::nullopt;
-            }
-            return u.get<T>();
-        }
-    };
-};
-
-template<class... Types>
-QByteArray pack(Types const &...args)
-{
-    Packer p;
-    (p << ... << args);
-    return p.ba;
-}
-
-template<class... Args, class E>
-tl::expected<std::tuple<Args...>, E> unwrapExpected(std::tuple<tl::expected<Args, E>...> const &tuple)
-{
-    auto firstError = std::apply(
-        [](auto const &...args) {
-            std::optional<E> error{};
-            (void) ((!args.has_value() ? (error = args.error(), true) : false) || ...);
-            return error;
-        },
-        tuple);
-
-    if (firstError.has_value())
-        return tl::make_unexpected(*firstError);
-
-    return std::apply([](auto const &...args) { return std::make_tuple(*args...); }, tuple);
-}
-
-template<typename... Args>
-tl::expected<std::tuple<Args...>, QString> unpack(QByteArray const &ba)
-{
-    Unpacker u(ba);
-    auto unpacked = std::make_tuple(u.get<Args>()...);
-    return unwrapExpected(unpacked);
-}
 
 class BiDiBSerialTransport : public QObject
 {
@@ -820,7 +688,7 @@ private:
     {
         BiDiBMessage m;
         m.type = type;
-        m.data = pack(t...);
+        m.data = Bd::pack(t...);
         return m;
     }
 
@@ -907,7 +775,7 @@ template<typename T, typename... Args>
 HandlerRegistration::HandlerRegistration(T *node, quint8 type, void (T::*handler)(Args...))
 {
     node->_handlers[type] = [node, handler](BiDiBMessage m) {
-        auto args = unpack<Args...>(m.data);
+        auto args = Bd::unpack<Args...>(m.data);
         if (args)
             std::apply(handler, std::tuple_cat(std::make_tuple(node), *args));
         else

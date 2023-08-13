@@ -6,6 +6,7 @@ qt_add_library(bidib
     include/bidib/node.h node.cpp
     include/bidib/serialconnection.h serialconnection.cpp
     include/bidib/serialtransport.h serialtransport.cpp
+    include/bidib/pack.h
 
     crc.h crc.cpp
     messagenames.cpp
