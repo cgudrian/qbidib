@@ -37,6 +37,19 @@ struct Packer
         ba.append(s.toLatin1().constData(), len);
         return *this;
     }
+
+    static QByteArray pack()
+    {
+        return {};
+    }
+
+    template<class... Types>
+    static QByteArray pack(Types const &...args)
+    {
+        Packer p;
+        (void)(p << ... << args);
+        return p.ba;
+    }
 };
 
 struct Unpacker
@@ -88,7 +101,6 @@ struct Unpacker
                 u.avail = 0;
                 return tl::make_unexpected(Error::OutOfData);
             }
-            auto s = QString::fromLatin1(u.buf, *len);
             return u.extract(QString::fromLatin1(u.buf, *len), *len);
         }
     };
@@ -104,23 +116,23 @@ struct Unpacker
             return std::nullopt;
         }
     };
+
+    template<typename... Args>
+    static tl::expected<std::tuple<Args...>, Error> unpack(QByteArray const &ba)
+    {
+        Unpacker u(ba);
+        auto unpacked = std::make_tuple(u.get<Args>()...);
+        return unwrapExpected(unpacked);
+    }
+
+    static tl::expected<std::tuple<>, Error> unpack(QByteArray const &)
+    {
+        return {};
+    }
 };
 
-QByteArray pack()
-{
-    return {};
-}
-
-template<class... Types>
-QByteArray pack(Types const &...args)
-{
-    Packer p;
-    (p << ... << args);
-    return p.ba;
-}
-
 template<class... Args, class E>
-tl::expected<std::tuple<Args...>, E> unwrapExpected(std::tuple<tl::expected<Args, E>...> const &tuple)
+static tl::expected<std::tuple<Args...>, E> unwrapExpected(std::tuple<tl::expected<Args, E>...> const &tuple)
 {
     auto firstError = std::apply(
         [](auto const &...args) {
@@ -134,19 +146,6 @@ tl::expected<std::tuple<Args...>, E> unwrapExpected(std::tuple<tl::expected<Args
         return tl::make_unexpected(*firstError);
 
     return std::apply([](auto const &...args) { return std::make_tuple(*args...); }, tuple);
-}
-
-template<typename... Args>
-tl::expected<std::tuple<Args...>, Error> unpack(QByteArray const &ba)
-{
-    Unpacker u(ba);
-    auto unpacked = std::make_tuple(u.get<Args>()...);
-    return unwrapExpected(unpacked);
-}
-
-tl::expected<std::tuple<>, Error> unpack(QByteArray const &)
-{
-    return {};
 }
 
 } // namespace Bd

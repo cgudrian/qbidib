@@ -2,20 +2,21 @@
 #include "messagenames.h"
 
 #include <QString>
+#include <QDebug>
 
 namespace Bd {
 
 static constexpr auto MAX_MESSAGE_SIZE = 63;
 
-QString messageName(quint8 type)
-{
-    return MessageNames[type] ? MessageNames[type] : QString::number(type);
-}
-
 Message::Message(quint8 type, QByteArray const &payload)
     : _type(type)
     , _payload(payload)
 {}
+
+QString Message::name(quint8 type)
+{
+    return MessageNames[type] ? MessageNames[type] : QString::number(type);
+}
 
 tl::expected<QByteArray, Error> Message::toSendBuffer(Address address, quint8 number) const
 {
@@ -39,6 +40,11 @@ quint8 Message::type() const
 const QByteArray &Message::payload() const
 {
     return _payload;
+}
+
+QDebug operator<<(QDebug d, Message const &msg)
+{
+    return d;
 }
 
 } // namespace Bd

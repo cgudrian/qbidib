@@ -367,86 +367,86 @@ struct S
 
 void TestBiDiB::packerPackValues()
 {
-    QCOMPARE(Bd::pack(quint8(1), quint16(2), quint32(3)), ba(1, 2, 0, 3, 0, 0, 0));
+    QCOMPARE(Bd::Packer::pack(quint8(1), quint16(2), quint32(3)), ba(1, 2, 0, 3, 0, 0, 0));
 }
 
 void TestBiDiB::packerPackStruct()
 {
-    QCOMPARE(Bd::pack(S{42, 43}), ba(42, 43));
+    QCOMPARE(Bd::Packer::pack(S{42, 43}), ba(42, 43));
 }
 
 void TestBiDiB::packerPackString()
 {
-    QCOMPARE(Bd::pack("Hallo, Welt!"), ba(12).append("Hallo, Welt!"));
+    QCOMPARE(Bd::Packer::pack("Hallo, Welt!"), ba(12).append("Hallo, Welt!"));
 }
 
 void TestBiDiB::packerPackNothing()
 {
-    QCOMPARE(Bd::pack(), ba());
+    QCOMPARE(Bd::Packer::pack(), ba());
 }
 
 void TestBiDiB::unpackerUnpackValues()
 {
-    auto t = Bd::unpack<quint8, quint16, quint32>(ba(1, 2, 0, 3, 0, 0, 0));
+    auto t = Bd::Unpacker::unpack<quint8, quint16, quint32>(ba(1, 2, 0, 3, 0, 0, 0));
     QVERIFY(t.has_value());
     QCOMPARE(t, std::make_tuple(1, 2, 3));
 }
 
 void TestBiDiB::unpackerUnpackStruct()
 {
-    auto t = Bd::unpack<S>(ba(42, 43));
+    auto t = Bd::Unpacker::unpack<S>(ba(42, 43));
     QVERIFY(t.has_value());
     QCOMPARE(t, std::make_tuple(S{42, 43}));
 }
 
 void TestBiDiB::unpackerUnpackString()
 {
-    auto t1 = Bd::unpack<QString>(ba(12).append("Hallo, Welt!"));
+    auto t1 = Bd::Unpacker::unpack<QString>(ba(12).append("Hallo, Welt!"));
     QVERIFY(t1.has_value());
     QCOMPARE(t1, std::make_tuple("Hallo, Welt!"));
 
-    auto t2 = Bd::unpack<QString>(ba(10).append(QStringLiteral("Größenwahn").toLatin1()));
+    auto t2 = Bd::Unpacker::unpack<QString>(ba(10).append(QStringLiteral("Größenwahn").toLatin1()));
     QVERIFY(t2.has_value());
     QCOMPARE(t2, std::make_tuple("Größenwahn"));
 }
 
 void TestBiDiB::unpackerUnpackNothing()
 {
-    auto t = Bd::unpack(ba(1));
+    auto t = Bd::Unpacker::unpack(ba(1));
     QVERIFY(t.has_value());
     QCOMPARE(t, std::make_tuple());
 }
 
 void TestBiDiB::unpackerUnpackOptionalValue()
 {
-    auto t1 = Bd::unpack<quint8, std::optional<quint8>>(ba(1, 2));
+    auto t1 = Bd::Unpacker::unpack<quint8, std::optional<quint8>>(ba(1, 2));
     QVERIFY(t1.has_value());
     QCOMPARE(t1, std::make_tuple(1, 2));
 
-    auto t2 = Bd::unpack<quint8, std::optional<quint8>>(ba(1));
+    auto t2 = Bd::Unpacker::unpack<quint8, std::optional<quint8>>(ba(1));
     QVERIFY(t2.has_value());
     QCOMPARE(t2, std::make_tuple(1, std::nullopt));
 }
 
 void TestBiDiB::unpackerUnpackOptionalString()
 {
-    auto t1 = Bd::unpack<quint8, std::optional<QString>>(ba(1));
+    auto t1 = Bd::Unpacker::unpack<quint8, std::optional<QString>>(ba(1));
     QVERIFY(t1.has_value());
     QCOMPARE(t1, std::make_tuple(1, std::nullopt));
 
-    auto t2 = Bd::unpack<quint8, std::optional<QString>>(ba(1, 12).append("Hallo, Welt!"));
+    auto t2 = Bd::Unpacker::unpack<quint8, std::optional<QString>>(ba(1, 12).append("Hallo, Welt!"));
     QVERIFY(t2.has_value());
     QCOMPARE(t2, std::make_tuple(1, "Hallo, Welt!"));
 
-    auto t3 = Bd::unpack<quint8, std::optional<QString>>(ba(1, 12).append("Hallo, Welt"));
+    auto t3 = Bd::Unpacker::unpack<quint8, std::optional<QString>>(ba(1, 12).append("Hallo, Welt"));
     QVERIFY(t3.has_value());
     QCOMPARE(t3, std::make_tuple(1, std::nullopt));
 
-    auto t4 = Bd::unpack<quint8, std::optional<QString>>(ba(1, 2).append("OK"));
+    auto t4 = Bd::Unpacker::unpack<quint8, std::optional<QString>>(ba(1, 2).append("OK"));
     QVERIFY(t4.has_value());
     QCOMPARE(t4, std::make_tuple(1, "OK"));
 
-    auto t5 = Bd::unpack<quint8, std::optional<QString>>(
+    auto t5 = Bd::Unpacker::unpack<quint8, std::optional<QString>>(
         ba(1, 10).append(QStringLiteral("Größenwahn").toLatin1()));
     QVERIFY(t5.has_value());
     QCOMPARE(t5, std::make_tuple(1, "Größenwahn"));
@@ -454,18 +454,18 @@ void TestBiDiB::unpackerUnpackOptionalString()
 
 void TestBiDiB::unpackerUnpackOutOfData()
 {
-    auto t = Bd::unpack<quint8, quint8>(ba(1));
+    auto t = Bd::Unpacker::unpack<quint8, quint8>(ba(1));
     QVERIFY(!t.has_value());
     QCOMPARE(t.error(), Bd::Error::OutOfData);
 }
 
 void TestBiDiB::unpackerTerminateAfterFirstError()
 {
-    auto t1 = Bd::unpack<quint8, std::optional<quint16>, std::optional<quint8>>(ba(1, 10));
+    auto t1 = Bd::Unpacker::unpack<quint8, std::optional<quint16>, std::optional<quint8>>(ba(1, 10));
     QVERIFY(t1.has_value());
     QCOMPARE(t1, std::make_tuple(1, std::nullopt, std::nullopt));
 
-    auto t2 = Bd::unpack<quint8, std::optional<quint16>, std::optional<quint8>>(ba(1, 10, 4));
+    auto t2 = Bd::Unpacker::unpack<quint8, std::optional<quint16>, std::optional<quint8>>(ba(1, 10, 4));
     QVERIFY(t2.has_value());
     QCOMPARE(t2, std::make_tuple(1, 0x040a, std::nullopt));
 }

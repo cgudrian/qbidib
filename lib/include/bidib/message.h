@@ -2,6 +2,7 @@
 
 #include <bidib/address.h>
 #include <bidib/error.h>
+#include <bidib/pack.h>
 
 #include <QtCore/QByteArray>
 
@@ -19,11 +20,21 @@ public:
     const QByteArray &payload() const;
     tl::expected<QByteArray, Error> toSendBuffer(Address address, quint8 number) const;
 
+    template<class... Types>
+    static Message create(int type, Types const &...t)
+    {
+        return Message(type, Packer::pack(t...));
+    }
+
+    static QString name(quint8 type);
+
 private:
     quint8 _type{};
     QByteArray _payload{};
+
+    friend QDebug operator<<(QDebug d, Message const &msg);
 };
 
-QString messageName(quint8 type);
+QDebug operator<<(QDebug d, Message const &msg);
 
 } // namespace Bd

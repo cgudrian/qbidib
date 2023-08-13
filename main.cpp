@@ -24,8 +24,8 @@ struct BiDiBMessage
 QDebug operator<<(QDebug d, BiDiBMessage const &msg)
 {
     QString addr = msg.addr.isEmpty() ? QStringLiteral("Self") : msg.addr.toHex('/');
-    d << "[" << qUtf8Printable(addr) << "]" << msg.num << qUtf8Printable(Bd::messageName(msg.type))
-      << qUtf8Printable(msg.data.toHex('-'));
+    d << "[" << qUtf8Printable(addr) << "]" << msg.num
+      << qUtf8Printable(Bd::Message::name(msg.type)) << qUtf8Printable(msg.data.toHex('-'));
     return d;
 }
 
@@ -688,7 +688,7 @@ private:
     {
         BiDiBMessage m;
         m.type = type;
-        m.data = Bd::pack(t...);
+        m.data = Bd::Packer::pack(t...);
         return m;
     }
 
@@ -775,7 +775,7 @@ template<typename T, typename... Args>
 HandlerRegistration::HandlerRegistration(T *node, quint8 type, void (T::*handler)(Args...))
 {
     node->_handlers[type] = [node, handler](BiDiBMessage m) {
-        auto args = Bd::unpack<Args...>(m.data);
+        auto args = Bd::Unpacker::unpack<Args...>(m.data);
         if (args)
             std::apply(handler, std::tuple_cat(std::make_tuple(node), *args));
         else
