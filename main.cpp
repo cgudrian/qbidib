@@ -206,14 +206,26 @@ public:
         _serial.setDataBits(QSerialPort::Data8);
         _serial.setParity(QSerialPort::NoParity);
         _serial.setStopBits(QSerialPort::OneStop);
-        if (!_serial.open(QIODevice::ReadWrite))
-            qFatal("Unable to open serial port");
 
         connect(&_serial,
                 &QSerialPort::readyRead,
                 this,
                 &BiDiBSerialTransport::receiveData,
                 Qt::QueuedConnection);
+
+        connect(&_serial,
+                &QSerialPort::errorOccurred,
+                this,
+                [this](QSerialPort::SerialPortError error) {
+                    qDebug() << error;
+                    if (error == QSerialPort::NoError)
+                        return;
+                    if (_serial.isOpen())
+                        _serial.close();
+                    QTimer::singleShot(1000, this, [this] { _serial.open(QIODevice::ReadWrite); });
+                });
+
+        _serial.open(QIODevice::ReadWrite);
     }
 
     void receiveData()
@@ -402,14 +414,14 @@ typedef struct __attribute__((__packed__)) // t_bidib_cs_drive
         {
             uint8_t f4_f1 : 4; // functions f4..f1
             uint8_t light : 1; // f0
-            uint8_t fill : 3; // 3 bits as usable space (ie. to store f29-f31 on a node)
+            uint8_t fill : 3;  // 3 bits as usable space (ie. to store f29-f31 on a node)
         };
         uint8_t f4_f0;
     };
     union {
         struct
         {
-            uint8_t f8_f5 : 4; // functions f8..f5
+            uint8_t f8_f5 : 4;  // functions f8..f5
             uint8_t f12_f9 : 4; // functions f12..f9
         };
         uint8_t f12_f5;
