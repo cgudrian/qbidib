@@ -10,25 +10,16 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core SerialPort Test)
-
 enable_testing(true)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
-qt_add_library(bidib
-    bidib.h bidib.cpp
-    crc.h crc.cpp
-)
-target_link_libraries(bidib PUBLIC Qt6::Core Qt6::SerialPort)
-
-qt_add_executable(bidib-test tst_bidib.cpp)
-target_link_libraries(bidib-test PRIVATE Qt6::Test bidib)
-add_test(NAME bidib-test COMMAND bidib-test)
+add_subdirectory(lib)
 
 qt_add_executable(BiDiBTest
-    bidib_messages.h
     main.cpp
 )
+target_include_directories(BiDiBTest PRIVATE tl)
 target_link_libraries(BiDiBTest PRIVATE Qt6::SerialPort bidib)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.

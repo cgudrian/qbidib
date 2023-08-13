@@ -3,8 +3,11 @@
 #include <QSignalSpy>
 #include <iostream>
 
-#include "bidib.h"
-#include "bidib_messages.h"
+#include <bidib/address.h>
+#include <bidib/bidib_messages.h>
+#include <bidib/message.h>
+#include <bidib/serialtransport.h>
+
 #include "crc.h"
 
 class TestBiDiB : public QObject

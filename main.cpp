@@ -7,8 +7,8 @@
 
 #include <signal.h>
 
-#include "bidib.h"
-#include "bidib_messages.h"
+#include <bidib/bidib_messages.h>
+#include <bidib/message.h>
 
 #include "expected.hpp"
 
@@ -402,14 +402,14 @@ typedef struct __attribute__((__packed__)) // t_bidib_cs_drive
         {
             uint8_t f4_f1 : 4; // functions f4..f1
             uint8_t light : 1; // f0
-            uint8_t fill : 3;  // 3 bits as usable space (ie. to store f29-f31 on a node)
+            uint8_t fill : 3; // 3 bits as usable space (ie. to store f29-f31 on a node)
         };
         uint8_t f4_f0;
     };
     union {
         struct
         {
-            uint8_t f8_f5 : 4;  // functions f8..f5
+            uint8_t f8_f5 : 4; // functions f8..f5
             uint8_t f12_f9 : 4; // functions f12..f9
         };
         uint8_t f12_f5;
@@ -540,7 +540,6 @@ class BiDiBNode : public QObject
 
 signals:
     void messageOut(BiDiBMessage m);
-    void upstream(BiDiBMessage m);
 
 public:
     explicit BiDiBNode()
