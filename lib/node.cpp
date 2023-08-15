@@ -107,7 +107,7 @@ private:
     quint8 _nodeTabVersion{1};
     MessageHandler _handlers[255];
 
-    HANDLER(MSG_NODETAB_GETALL)
+    HANDLER(MSG_NODETAB_GETALL, void)
     {
         auto e = Enumerator::create(_nodes);
 

@@ -1,7 +1,9 @@
 #pragma once
 
+#include <QtTypes>
+
 namespace Bd {
 
-extern char const *MessageNames[256];
+const char *messageName(quint8 id);
 
 }

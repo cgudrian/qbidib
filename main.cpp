@@ -11,8 +11,6 @@
 #include <bidib/message.h>
 #include <bidib/pack.h>
 
-#include "expected.hpp"
-
 struct BiDiBMessage
 {
     QByteArray addr{};
@@ -259,85 +257,27 @@ private:
 
 using MessageHandler = std::function<void(BiDiBMessage)>;
 
-typedef struct __attribute__((__packed__)) // t_bidib_cs_drive
+struct __attribute__((__packed__)) CsDrive
 {
-    union {
-        struct
-        {
-            uint8_t addrl; // low byte of addr
-            uint8_t addrh; // high byte of addr
-        };
-        uint16_t addr; // true dcc address (start with 0)
-    };
-    uint8_t format; // BIDIB_CS_DRIVE_FORMAT_DCC14, _DCC28, _DCC128
-    uint8_t active; // BIDIB_CS_DRIVE_SPEED_BIT,
-        // BIDIB_CS_DRIVE_F1F4_BIT     (1<<1)
-        // BIDIB_CS_DRIVE_F5F8_BIT     (1<<2)
-        // BIDIB_CS_DRIVE_F9F12_BIT    (1<<3)
-        // BIDIB_CS_DRIVE_F13F20_BIT   (1<<4)
-        // BIDIB_CS_DRIVE_F21F28_BIT   (1<<5)
-    uint8_t speed; // like DCC, MSB=1:forward, MSB=0:revers, speed=1: ESTOP
-    union {
-        struct
-        {
-            uint8_t f4_f1 : 4; // functions f4..f1
-            uint8_t light : 1; // f0
-            uint8_t fill : 3;  // 3 bits as usable space (ie. to store f29-f31 on a node)
-        };
-        uint8_t f4_f0;
-    };
-    union {
-        struct
-        {
-            uint8_t f8_f5 : 4;  // functions f8..f5
-            uint8_t f12_f9 : 4; // functions f12..f9
-        };
-        uint8_t f12_f5;
-    };
-    union {
-        struct
-        {
-            uint8_t f16_f13 : 4; // functions f16..f13
-            uint8_t f20_f17 : 4; // functions f20..f17
-        };
-        uint8_t f20_f13;
-    };
-    union {
-        struct
-        {
-            uint8_t f24_f21 : 4; // functions f24..f21
-            uint8_t f28_f25 : 4; // functions f28..f25
-        };
-        uint8_t f28_f21;
-    };
-} t_bidib_cs_drive;
+    quint16 addr;
+    quint8 format;
+    quint8 active;
+    quint8 speed;
+    quint8 f4_f0;
+    quint8 f12_f5;
+    quint8 f20_f13;
+    quint8 f28_f21;
+};
+static_assert(sizeof(CsDrive) == 9);
 
 struct __attribute__((packed)) UniqueId
 {
     union {
-        struct
-        {
-            quint8 zwitch : 1;
-            quint8 booster : 1;
-            quint8 accessory : 1;
-            quint8 dccProg : 1;
-            quint8 dccMain : 1;
-            quint8 ui : 1;
-            quint8 occupancy : 1;
-            quint8 bridge : 1;
-        } clazz;
         quint8 classId;
     };
     quint8 classIdEx;
     quint8 vendorId;
-    union {
-        struct
-        {
-            quint16 id;
-            quint16 serial;
-        } product;
-        quint32 productId;
-    };
+    quint32 productId;
 };
 static_assert(sizeof(UniqueId) == 7);
 
@@ -425,23 +365,16 @@ public:
     explicit BiDiBNode()
     {
         static const auto MyUniqueId = UniqueId{
-                .clazz = {
-                    .booster = 1,
-                    .accessory = 1,
-                    .dccMain = 1,
-//                    .bridge = 1,
-                },
-                .vendorId = 0x0d,
-                .productId = 0xdeadbeef,
-            };
+            .classId = 0x0,
+            .vendorId = 0x0d,
+            .productId = 0xdeadbeef,
+        };
 
         static const auto OtherUniqueId = UniqueId{
-                .clazz = {
-                          .accessory = 1,
-                },
-                .vendorId = 0x0d,
-                .productId = 0xcafebabe,
-            };
+            .classId = 0x0,
+            .vendorId = 0x0d,
+            .productId = 0xcafebabe,
+        };
 
         registerStaticReply(MSG_SYS_GET_MAGIC, makeMessage<quint16>(MSG_SYS_MAGIC, BIDIB_SYS_MAGIC));
         registerStaticReply(MSG_FEATURE_GETNEXT, FeatureNA);
@@ -525,7 +458,7 @@ private:
         return value;
     }
 
-    HANDLE(MSG_NODETAB_GETALL)
+    HANDLE(MSG_NODETAB_GETALL, void)
     {
         auto e = Enumerator::create(_nodes);
 
@@ -601,11 +534,11 @@ private:
         sendReply(MSG_ACCESSORY_PARA, anum, BIDIB_ACCESSORY_PARA_NOTEXIST, pnum);
     }
 
-    HANDLE(MSG_SYS_ENABLE) { qDebug() << "System enabled"; }
+    HANDLE(MSG_SYS_ENABLE, void) { qDebug() << "System enabled"; }
 
-    HANDLE(MSG_SYS_DISABLE) { qDebug() << "System disabled"; }
+    HANDLE(MSG_SYS_DISABLE, void) { qDebug() << "System disabled"; }
 
-    HANDLE(MSG_CS_DRIVE, t_bidib_cs_drive cs_drive)
+    HANDLE(MSG_CS_DRIVE, CsDrive cs_drive)
     {
         quint8 ack = 1;
         sendReply(MSG_CS_DRIVE_ACK, cs_drive.addr, ack);
@@ -633,7 +566,7 @@ private:
 
     HANDLE(MSG_FEATURE_GETALL, std::optional<quint8> shouldStream)
     {
-        bool useStreaming = shouldStream.value_or(0) == 1;
+        // bool useStreaming = shouldStream.value_or(0) == 1;
 
         auto e = Enumerator::create(_features);
 
@@ -650,7 +583,7 @@ private:
         }
     }
 
-    HANDLE(MSG_BOOST_QUERY) { sendReply<quint8>(MSG_BOOST_STAT, _boosterState); }
+    HANDLE(MSG_BOOST_QUERY, void) { sendReply<quint8>(MSG_BOOST_STAT, _boosterState); }
 
     HANDLE(MSG_BOOST_ON, quint8 local)
     {
@@ -714,7 +647,7 @@ private:
     void registerMessageHandler(quint8 type, void (BiDiBNode::*handler)(Args... args))
     {
         _handlers[type] = [this, handler](BiDiBMessage m) {
-            auto args = unpack<Args...>(m.data);
+            auto args = Bd::Unpacker::unpack<Args...>(m.data);
             if (args)
                 std::apply(handler, std::tuple_cat(std::make_tuple(this), *args));
             else

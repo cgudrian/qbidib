@@ -6,13 +6,15 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core SerialPort Test)
 enable_testing(true)
 
 qt_standard_project_setup(REQUIRES 6.5)
+
+add_compile_options(-Wall -Wpedantic)
 
 add_subdirectory(lib)
 

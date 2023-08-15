@@ -15,7 +15,7 @@ Message::Message(quint8 type, QByteArray const &payload)
 
 QString Message::name(quint8 type)
 {
-    return MessageNames[type] ? MessageNames[type] : QString::number(type);
+    return Bd::messageName(type) ? Bd::messageName(type) : QString::number(type);
 }
 
 tl::expected<QByteArray, Error> Message::toSendBuffer(Address address, quint8 number) const
