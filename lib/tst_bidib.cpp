@@ -232,6 +232,7 @@ void TestBiDiB::serialTransportProcessContiguousFrame()
 {
     Bd::SerialTransport st;
     QSignalSpy sp(&st, &Bd::SerialTransport::frameReceived);
+    QVERIFY(sp.isValid());
     st.processData(ba(BIDIB_PKT_MAGIC, 1, 2, 3, 4, BIDIB_PKT_MAGIC));
     QCOMPARE(sp.count(), 1);
     QCOMPARE(sp[0][0], ba(1, 2, 3, 4));

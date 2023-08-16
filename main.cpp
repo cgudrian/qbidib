@@ -135,23 +135,23 @@ public:
     {
         QByteArray out;
         out.reserve(64);
-        out.append(BIDIB_PKT_MAGIC);
+        out.append(static_cast<quint8>(BIDIB_PKT_MAGIC));
         int crc = 0;
         for (quint8 c : packet) {
             crc = crcTable[crc ^ c];
             if (c == BIDIB_PKT_MAGIC || c == BIDIB_PKT_ESCAPE) {
-                out.append(BIDIB_PKT_ESCAPE);
+                out.append(static_cast<quint8>(BIDIB_PKT_ESCAPE));
                 c = c ^ 0x20;
             }
             out.append(c);
         }
         if (crc == BIDIB_PKT_MAGIC) {
-            out.append(BIDIB_PKT_ESCAPE);
+            out.append(static_cast<quint8>(BIDIB_PKT_ESCAPE));
             out.append(crc ^ 0x20);
         } else {
             out.append(crc);
         }
-        out.append(BIDIB_PKT_MAGIC);
+        out.append(static_cast<quint8>(BIDIB_PKT_MAGIC));
 
         _serial.write(out);
     }

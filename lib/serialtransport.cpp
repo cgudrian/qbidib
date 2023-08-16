@@ -22,7 +22,7 @@ void SerialTransport::processData(QByteArray const &data)
     Q_D(SerialTransport);
 
     auto from = 0;
-    auto to = data.indexOf(BIDIB_PKT_MAGIC, from);
+    auto to = data.indexOf(static_cast<quint8>(BIDIB_PKT_MAGIC), from);
 
     // skip leading garbage
     if (d->currentFrame.isEmpty() && to > 0)
@@ -38,7 +38,7 @@ void SerialTransport::processData(QByteArray const &data)
             }
         }
         from = to + 1;
-        to = data.indexOf(BIDIB_PKT_MAGIC, from);
+        to = data.indexOf(static_cast<quint8>(BIDIB_PKT_MAGIC), from);
     }
     d->currentFrame.append(data.sliced(from));
 }
@@ -54,7 +54,7 @@ QByteArray SerialTransport::escape(QByteArray const &ba)
     while (i < ba.size()) {
         quint8 c = ba[i++];
         if (c == BIDIB_PKT_MAGIC || c == BIDIB_PKT_ESCAPE) {
-            result.insert(o++, BIDIB_PKT_ESCAPE);
+            result.insert(o++, static_cast<quint8>(BIDIB_PKT_ESCAPE));
             result[o] = c ^ 0x20;
         }
         o++;

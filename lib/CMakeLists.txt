@@ -1,4 +1,4 @@
-qt_add_library(bidib
+qt_add_library(bidib STATIC
     include/bidib/address.h address.cpp
     include/bidib/error.h
     include/bidib/bidib_messages.h

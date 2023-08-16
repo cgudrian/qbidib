@@ -15,7 +15,7 @@ class SerialTransport : public QObject
     Q_OBJECT
 
 signals:
-    void frameReceived(QByteArray const &frame);
+    void frameReceived(const QByteArray &frame);
 
 public slots:
     void processData(QByteArray const &data);

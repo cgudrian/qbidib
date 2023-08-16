@@ -1238,7 +1238,7 @@ typedef struct
 #define M4_TID 0x80             // followed by 4 Bytes UID and 2 Bytes SID. This is the answer to GET_TID and SET_TID.
 #define M4_BEACON 0x82          // followed by 1 Byte with the interval. This is the answer to BEACON.
 #define M4_SEARCH 0x83          // followed by 1 Byte with the interval. This is the answer to SEARCH.
-#define M4_BIND_ADDR_ACK 0x84   // followed by 1 Byte with the ack code (0:not available, 1:ok, 2:delayed, 5:worked and inquiry successful), \
+#define M4_BIND_ADDR_ACK 0x84   // followed by 1 Byte with the ack code (0:not available, 1:ok, 2:delayed, 5:worked and inquiry successful),
                                 // 4 Bytes DID and 2 Bytes address. This is the answer to BIND_ADDR.
 #define M4_UNBIND_ADDR_ACK 0x85 // followed by 1 Byte ack, 2 Bytes address, similar to MSG_CS_DRIVE_ACK
 #define M4_NEW_LOCO 0x86        // followed by 4 Bytes with the DID of the newly found decoder.
