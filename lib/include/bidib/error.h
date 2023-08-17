@@ -14,6 +14,8 @@ enum class Error {
     AddressMissingTerminator,
     MessageTooLarge,
     EscapingIncomplete,
+    BadChecksum,
+    MessageMalformed,
 };
 
 Q_ENUM_NS(Error);

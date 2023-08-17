@@ -42,6 +42,12 @@ private slots:
     void serialTransportEscape();
     void serialTransportUnescape_data();
     void serialTransportUnescape();
+    void serialTransportFrameSingleMessageWithoutPayload();
+    void serialTransportFrameSingleMessageWithPayload();
+    void serialTransportFrameMultipleMessages();
+    void serialTransportFrameWrongChecksum();
+    void serialTransportFrameMessageTooShort();
+    void serialTransportFrameMessageInvalidAddress();
 
     void computeCrc8();
 
@@ -70,7 +76,7 @@ QByteArray ba(Args... args)
 {
     QByteArray b;
     b.reserve(sizeof...(Args));
-    (b += ... += args);
+    (b += ... += static_cast<quint8>(args));
     return b;
 }
 
@@ -232,7 +238,6 @@ void TestBiDiB::serialTransportProcessContiguousFrame()
 {
     Bd::SerialTransport st;
     QSignalSpy sp(&st, &Bd::SerialTransport::frameReceived);
-    QVERIFY(sp.isValid());
     st.processData(ba(BIDIB_PKT_MAGIC, 1, 2, 3, 4, BIDIB_PKT_MAGIC));
     QCOMPARE(sp.count(), 1);
     QCOMPARE(sp[0][0], ba(1, 2, 3, 4));
@@ -350,6 +355,79 @@ void TestBiDiB::serialTransportUnescape()
     QFETCH(QByteArray, escaped);
     QFETCH(T, unescaped);
     QCOMPARE(Bd::SerialTransport::unescape(escaped), unescaped);
+}
+
+void TestBiDiB::serialTransportFrameSingleMessageWithoutPayload()
+{
+    Bd::SerialTransport st;
+    QSignalSpy messageReceived(&st, &Bd::SerialTransport::messageReceived);
+    QSignalSpy errorOccurred(&st, &Bd::SerialTransport::errorOccurred);
+    st.processFrame(ba(0x06, 0x01, 0x02, 0x03, 0x00, 0x55, 0xaa, 0xeb));
+    QCOMPARE(errorOccurred.count(), 0);
+    QCOMPARE(messageReceived.count(), 1);
+    QCOMPARE(messageReceived[0][0], QVariant::fromValue(Bd::Address(0x030201)));
+}
+
+void TestBiDiB::serialTransportFrameSingleMessageWithPayload()
+{
+    Bd::SerialTransport st;
+    QSignalSpy messageReceived(&st, &Bd::SerialTransport::messageReceived);
+    QSignalSpy errorOccurred(&st, &Bd::SerialTransport::errorOccurred);
+    st.processFrame(ba(0x0a, 0x01, 0x02, 0x03, 0x00, 0x55, 0xaa, 0xde, 0xad, 0xbe, 0xef, 0xd8));
+    QCOMPARE(errorOccurred.count(), 0);
+    QCOMPARE(messageReceived.count(), 1);
+    QCOMPARE(messageReceived[0][0], QVariant::fromValue(Bd::Address(0x030201)));
+    QCOMPARE(messageReceived[0][1], QVariant::fromValue(Bd::Message(0xaa, ba(0xde, 0xad, 0xbe, 0xef))));
+}
+
+void TestBiDiB::serialTransportFrameMultipleMessages()
+{
+    Bd::SerialTransport st;
+    QSignalSpy messageReceived(&st, &Bd::SerialTransport::messageReceived);
+    QSignalSpy errorOccurred(&st, &Bd::SerialTransport::errorOccurred);
+    st.processFrame(ba(0x0a, 0x01, 0x02, 0x03, 0x00, 0x55, 0xaa, 0xde, 0xad, 0xbe, 0xef, 0x08, 0x03, 0x02, 0x01, 0x00, 0x56, 0xdd, 0x01, 0x02, 0xe5));
+    QCOMPARE(errorOccurred.count(), 0);
+    QCOMPARE(messageReceived.count(), 2);
+    QCOMPARE(messageReceived[0][0], QVariant::fromValue(Bd::Address(0x030201)));
+    QCOMPARE(messageReceived[0][1], QVariant::fromValue(Bd::Message(0xaa, ba(0xde, 0xad, 0xbe, 0xef))));
+    QCOMPARE(messageReceived[1][0], QVariant::fromValue(Bd::Address(0x010203)));
+    QCOMPARE(messageReceived[1][1], QVariant::fromValue(Bd::Message(0xdd, ba(0x01, 0x02))));
+}
+
+void TestBiDiB::serialTransportFrameWrongChecksum()
+{
+    Bd::SerialTransport st;
+    QSignalSpy messageReceived(&st, &Bd::SerialTransport::messageReceived);
+    QSignalSpy errorOccurred(&st, &Bd::SerialTransport::errorOccurred);
+    st.processFrame(ba(0x0a, 0x01, 0x02, 0x03, 0x01, 0x55, 0xaa, 0xde, 0xad, 0xbe, 0xef, 0xd8));
+    QCOMPARE(errorOccurred.count(), 1);
+    QCOMPARE(messageReceived.count(), 0);
+    QCOMPARE(errorOccurred[0][0].value<Bd::Error>(), Bd::Error::BadChecksum);
+    QCOMPARE(errorOccurred[0][1].toByteArray(), ba(0x0a, 0x01, 0x02, 0x03, 0x01, 0x55, 0xaa, 0xde, 0xad, 0xbe, 0xef, 0xd8));
+}
+
+void TestBiDiB::serialTransportFrameMessageTooShort()
+{
+    Bd::SerialTransport st;
+    QSignalSpy messageReceived(&st, &Bd::SerialTransport::messageReceived);
+    QSignalSpy errorOccurred(&st, &Bd::SerialTransport::errorOccurred);
+    st.processFrame(ba(0x0a, 0x01, 0x02, 0x03, 0x00, 0x55, 0xaa, 0xde, 0xad, 0xef, 0x11));
+    QCOMPARE(errorOccurred.count(), 1);
+    QCOMPARE(messageReceived.count(), 0);
+    QCOMPARE(errorOccurred[0][0], QVariant::fromValue(Bd::Error::OutOfData));
+    QCOMPARE(errorOccurred[0][1].toByteArray(), ba(0x01, 0x02, 0x03, 0x00, 0x55, 0xaa, 0xde, 0xad, 0xef));
+}
+
+void TestBiDiB::serialTransportFrameMessageInvalidAddress()
+{
+    Bd::SerialTransport st;
+    QSignalSpy messageReceived(&st, &Bd::SerialTransport::messageReceived);
+    QSignalSpy errorOccurred(&st, &Bd::SerialTransport::errorOccurred);
+    st.processFrame(ba(0x09, 0x01, 0x02, 0x03, 0x01, 0x55, 0xaa, 0xde, 0xad, 0xef, 0x6d));
+    QCOMPARE(errorOccurred.count(), 1);
+    QCOMPARE(messageReceived.count(), 0);
+    QCOMPARE(errorOccurred[0][0], QVariant::fromValue(Bd::Error::AddressMissingTerminator));
+    QCOMPARE(errorOccurred[0][1].toByteArray(), ba(0x01, 0x02, 0x03, 0x01, 0x55, 0xaa, 0xde, 0xad, 0xef));
 }
 
 void TestBiDiB::computeCrc8()

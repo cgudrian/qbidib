@@ -6,10 +6,25 @@ namespace Bd {
 
 Address::Address() {}
 
-Address::Address(QByteArray bytes)
+Address::Address(QByteArrayView bytes)
 {
-    bytes.resize(4, 0);
-    _stack = *reinterpret_cast<const quint32 *>(bytes.constData());
+    Q_ASSERT(bytes.size() <= 4);
+
+    _stack = 0;
+    switch (bytes.size()) {
+    case 4:
+        _stack |= bytes[3] << 24;
+        // fall through
+    case 3:
+        _stack |= bytes[2] << 16;
+        // fall through
+    case 2:
+        _stack |= bytes[1] << 8;
+        // fall through
+    case 1:
+        _stack |= bytes[0];
+        break;
+    }
 }
 
 Address::Address(quint32 stack)
@@ -69,16 +84,16 @@ bool Address::operator==(Address const &rhs) const
     return _stack == rhs._stack;
 }
 
-tl::expected<Address, Error> Address::parse(QByteArray const &ba)
+tl::expected<Address, Error> Address::parse(QByteArrayView bytes)
 {
-    if (ba.isEmpty())
+    if (bytes.isEmpty())
         return tl::make_unexpected(Error::OutOfData);
-    auto size = ba.indexOf('\0');
+    auto size = bytes.indexOf('\0');
     if (size == -1)
         return tl::make_unexpected(Error::AddressMissingTerminator);
     if (size > 4)
         return tl::make_unexpected(Error::AddressTooLong);
-    return Address(ba.first(size));
+    return Address(bytes.first(size));
 }
 
 QDebug operator<<(QDebug d, Address const &a)

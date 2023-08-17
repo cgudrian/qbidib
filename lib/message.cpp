@@ -32,6 +32,11 @@ tl::expected<QByteArray, Error> Message::toSendBuffer(Address address, quint8 nu
     return buf;
 }
 
+bool Message::operator==(const Message &rhs) const
+{
+    return rhs._type == _type && rhs._payload == _payload;
+}
+
 quint8 Message::type() const
 {
     return _type;

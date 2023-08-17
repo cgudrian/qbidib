@@ -26,6 +26,8 @@ public:
         return Message(type, Packer::pack(t...));
     }
 
+    bool operator==(Message const &rhs) const;
+
     static QString name(quint8 type);
 
 private:

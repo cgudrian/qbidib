@@ -14,6 +14,8 @@ namespace Bd {
 class Address
 {
 public:
+    explicit Address(quint32 stack);
+
     static Address localNode();
     QByteArray toByteArray() const;
     qsizetype size() const;
@@ -21,12 +23,11 @@ public:
     tl::expected<quint8, Error> downstream();
     tl::expected<void, Error> upstream(quint8 node);
     bool operator==(Address const &rhs) const;
-    static tl::expected<Address, Error> parse(QByteArray const &ba);
+    static tl::expected<Address, Error> parse(QByteArrayView bytes);
 
 private:
     Address();
-    explicit Address(QByteArray bytes);
-    explicit Address(quint32 stack);
+    explicit Address(QByteArrayView bytes);
 
     quint32 _stack{};
 
